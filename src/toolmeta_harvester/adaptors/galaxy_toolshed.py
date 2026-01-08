@@ -229,7 +229,9 @@ def has_shed_yml(contents):
 #                 print("Recursing into directory:", dir_url)
 #                 crawl_repositories({dir_url})
 
-def crawl_repository(repo, collector=[]):
+def crawl_repository(repo, collector=None):
+    if collector is None:
+        collector = []
     response = requests.get(repo)
     if response.status_code != 200:
         # print(f"Failed to fetch {repo}: {response.status_code}")

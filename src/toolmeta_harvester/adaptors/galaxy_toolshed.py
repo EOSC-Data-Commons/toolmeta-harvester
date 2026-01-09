@@ -1,5 +1,6 @@
 import requests
 import json
+from time import sleep
 from dataclasses import dataclass
 from pathlib import Path
 from lxml import etree
@@ -16,6 +17,7 @@ class ToolInfo:
     inputs: list
     outputs: list
     command: str
+    repo_url: str
 
 def get_json(url):
     r = requests.get(url, timeout=30)
@@ -76,11 +78,14 @@ def substitute_tokens(xml_str, tokens):
 #
 #         parent.remove(expand)
 
-def parse_xml(tool_xml, dir_contents=None):
+def parse_xml(tool_xml, dir_contents=None, repo_url=""):
     tree = etree.fromstring(tool_xml.encode())
+    if tree.tag != "tool":
+        return None
     macro_files = get_macro_files(tree)
     new_xml = tool_xml
     for macro_file in macro_files:
+        print("Processing macro file:", macro_file)
         macro_url = get_file_url(dir_contents or [], macro_file)
         if not macro_url:
             continue
@@ -88,13 +93,10 @@ def parse_xml(tool_xml, dir_contents=None):
         macro_tree = etree.fromstring(macro_xml.encode())
         tokens = extract_tokens(macro_tree)
         new_xml = substitute_tokens(new_xml, tokens)
+
     tree = etree.fromstring(new_xml.encode())
     inputs = []
     outputs = []
-
-    if tree.tag != "tool":
-        return (None, None, None)
-
     for param in tree.xpath(".//inputs//*"):
         tag = param.tag
         name = param.get("name")
@@ -126,7 +128,6 @@ def parse_xml(tool_xml, dir_contents=None):
                 "label": label
             })
 
-
     tool_name = tree.get("name")
     tool_id = tree.get("id")
     version = tree.get("version")
@@ -138,7 +139,8 @@ def parse_xml(tool_xml, dir_contents=None):
         version=version,
         inputs=inputs,
         outputs=outputs,
-        command=command
+        command=command,
+        repo_url=repo_url,
     )
 
 def load_repositories(use_cache=True):
@@ -175,9 +177,6 @@ def get_unique_repositories():
     repos = load_repositories(use_cache=True)
     unique_repos = set()
     for repo in repos:
-        # repo_id = repo["id"]
-        # owner = repo["owner"]
-        # name = repo["name"]
         remote_repository_url = repo["remote_repository_url"]
         if not remote_repository_url:
             continue
@@ -195,68 +194,40 @@ def get_file_url(contents, file_name):
 
 def has_shed_yml(contents):
     for entry in contents:
-        if entry['type'] == 'file' and entry['name'] == '.shed.yml':
+        if entry['type'] == 'file' and entry['name'].lower() == '.shed.yml':
             return True
     return False
-
-
-# def crawl_repositories(unique_repos):
-#     for repo in unique_repos:
-#         print(f"Crawling repository: {repo}")
-#         response = requests.get(repo)
-#         if response.status_code != 200:
-#             print(f"Failed to fetch {repo}: {response.status_code}")
-#             continue
-#         has_shed_file = has_shed_yml(response.json())
-#         for entry in response.json():
-#             if entry['type'] == 'file' and entry['name'].endswith('.xml') and has_shed_file:
-#                 xml_url = entry['download_url']
-#                 try:
-#                     xml = fetch_xml(xml_url)
-#                     
-#                     # inputs = parse_inputs(xml)
-#                     tool = parse_xml(xml, response.json())
-#                     if not tool.id:
-#                         print(f"Skipping non-tool XML: {xml_url}")
-#                         continue
-#                     # print(f"Tool: {entry['name']}, Inputs: {inputs}")
-#                     print(f"Tool: {tool.id}, Version: {tool.version}, Inputs: {tool.inputs}, Outputs: {tool.outputs}, Command: {tool.command}")
-#                 except Exception as e:
-#                     print(f"Failed to parse {xml_url}: {e}")
-#                     continue
-#             if entry["type"] == "dir" and not has_shed_file:
-#                 dir_url = entry["url"]
-#                 print("Recursing into directory:", dir_url)
-#                 crawl_repositories({dir_url})
 
 def crawl_repository(repo, collector=None):
     if collector is None:
         collector = []
+    print(f"Crawling repository: {repo}")
     response = requests.get(repo)
+    if response.status_code == 403:
+        print(f"Rate limited when accessing {repo}")
+        sleep(3610) # rate limit for unauthenticated requests 60 requests per 1 hour and 5000 per hour for authenticated
+        crawl_repository(repo, collector)
+        return collector
     if response.status_code != 200:
-        # print(f"Failed to fetch {repo}: {response.status_code}")
-        return []
+        print(f"Failed to fetch {repo}: {response.status_code}")
+        return collector
     has_shed_file = has_shed_yml(response.json())
     for entry in response.json():
-        if entry['type'] == 'file' and entry['name'].endswith('.xml') and has_shed_file:
+        if entry['type'] == 'file' and entry['name'].lower().endswith('.xml') and has_shed_file:
             xml_url = entry['download_url']
             try:
                 xml = fetch_xml(xml_url)
-                
-                # inputs = parse_inputs(xml)
-                tool = parse_xml(xml, response.json())
-                if not tool.id:
+                tool = parse_xml(xml, response.json(), repo)
+                if not tool:
                     print(f"Skipping non-tool XML: {xml_url}")
                     continue
                 collector.append(tool)
-                # print(f"Tool: {entry['name']}, Inputs: {inputs}")
-                # print(f"Tool: {tool.id}, Version: {tool.version}, Inputs: {tool.inputs}, Outputs: {tool.outputs}, Command: {tool.command}")
+                print(f"Tool: {tool.id}, Version: {tool.version}, Inputs: {tool.inputs}, Outputs: {tool.outputs}, Command: {tool.command}")
             except Exception as e:
-                # print(f"Failed to parse {xml_url}: {e}")
+                print(f"Error processing {xml_url}: {e}")
                 continue
         if entry["type"] == "dir" and not has_shed_file:
             dir_url = entry["url"]
-            print("Recursing into directory:", dir_url)
             crawl_repository(dir_url, collector)
     return collector
 
@@ -267,7 +238,8 @@ if __name__ == "__main__":
 
         tools = crawl_repository(repo)
         for tool in tools:
-            print(f"Tool: {tool.id}, Version: {tool.version}, Inputs: {tool.inputs}, Outputs: {tool.outputs}, Command: {tool.command}")
+            # print(f"Tool: {tool.id}, Version: {tool.version}, Inputs: {tool.inputs}, Outputs: {tool.outputs}, Command: {tool.command}")
+            print(f"Tool: {tool.id}, Version: {tool.version}, repo: {tool.repo_url}")
 
 
     # print(f"{count}: name: {name}, repo: {remote_repository_url}, converted: {converted_repo_url}")

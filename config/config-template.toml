@@ -4,3 +4,6 @@ port = 5432
 name = "admin"
 user = "harvester"
 password = "yoursecretsecret"
+
+[github]
+api_key="your_github_api_key"

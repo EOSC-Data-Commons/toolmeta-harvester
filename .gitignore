@@ -1,5 +1,6 @@
 **/.DS_Store
 cache
+**/*_cache.sqlite
 **/config.toml
 # Byte-compiled / optimized / DLL files
 __pycache__/

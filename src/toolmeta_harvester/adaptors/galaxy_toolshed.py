@@ -1,13 +1,27 @@
 import requests
+import requests_cache
 import json
 from time import sleep
 from dataclasses import dataclass
 from pathlib import Path
 from lxml import etree
 from urllib.parse import urlparse
+from toolmeta_harvester.config import load_git_config
 
 TOOLShed = "https://toolshed.g2.bx.psu.edu"
 CACHE_FILE = "cache/toolshed_registry.json"
+GIT_CONFIG = load_git_config()
+GITHUB_TOKEN = GIT_CONFIG.api_key
+
+HEADERS = {
+    "Authorization": f"Bearer {GITHUB_TOKEN}",
+    "Accept": "application/vnd.github+json",
+}
+
+# Initialize requests cache 
+requests_cache.install_cache('toolshed_cache', 
+                             backend='sqlite',
+                             expire_after=86400)
 
 @dataclass(frozen=True)
 class ToolInfo:
@@ -18,9 +32,11 @@ class ToolInfo:
     outputs: list
     command: str
     repo_url: str
+    raw: str
+    raw_format: str = "xml"
 
 def get_json(url):
-    r = requests.get(url, timeout=30)
+    r = requests.get(url, timeout=30, headers=HEADERS)
     r.raise_for_status()
     return r.json()
 
@@ -36,7 +52,7 @@ def is_cached(filename):
     return Path(filename).is_file()
 
 def fetch_xml(url):
-    r = requests.get(url, timeout=30)
+    r = requests.get(url, timeout=30, headers=HEADERS)
     r.raise_for_status()
     return r.text
 
@@ -94,39 +110,48 @@ def parse_xml(tool_xml, dir_contents=None, repo_url=""):
         tokens = extract_tokens(macro_tree)
         new_xml = substitute_tokens(new_xml, tokens)
 
+    # Tokens can be defined in the main tool XML as well
+    tokens = extract_tokens(tree)
+    new_xml = substitute_tokens(new_xml, tokens)
+
     tree = etree.fromstring(new_xml.encode())
     inputs = []
     outputs = []
     for param in tree.xpath(".//inputs//*"):
+        
         tag = param.tag
+        if tag.lower() != "param":
+            continue
         name = param.get("name")
         ptype = param.get("type")
+        if ptype == "select":
+            continue
         fmt = param.get("format")
         label = param.get("label")
 
-        if name:
-            inputs.append({
-                "name": name,
-                "tag": tag,
-                "type": ptype,
-                "format": fmt,
-                "label": label
-            })
+        inputs.append({
+            "name": name,
+            "tag": tag,
+            "type": ptype,
+            "format": fmt,
+            "label": label
+        })
     for param in tree.xpath(".//outputs//*"):
         tag = param.tag
+        if tag.lower() != "data":
+            continue
         name = param.get("name")
-        ptype = param.get("type")
+        ptype = "data"
         fmt = param.get("format")
         label = param.get("label")
 
-        if name:
-            outputs.append({
-                "name": name,
-                "tag": tag,
-                "type": ptype,
-                "format": fmt,
-                "label": label
-            })
+        outputs.append({
+            "name": name,
+            "tag": tag,
+            "type": ptype,
+            "format": fmt,
+            "label": label
+        })
 
     tool_name = tree.get("name")
     tool_id = tree.get("id")
@@ -141,6 +166,7 @@ def parse_xml(tool_xml, dir_contents=None, repo_url=""):
         outputs=outputs,
         command=command,
         repo_url=repo_url,
+        raw=new_xml,
     )
 
 def load_repositories(use_cache=True):
@@ -202,15 +228,17 @@ def crawl_repository(repo, collector=None):
     if collector is None:
         collector = []
     print(f"Crawling repository: {repo}")
-    response = requests.get(repo)
-    if response.status_code == 403:
-        print(f"Rate limited when accessing {repo}")
-        sleep(3610) # rate limit for unauthenticated requests 60 requests per 1 hour and 5000 per hour for authenticated
-        crawl_repository(repo, collector)
-        return collector
-    if response.status_code != 200:
-        print(f"Failed to fetch {repo}: {response.status_code}")
-        return collector
+    response = requests.get(repo, timeout=30, headers=HEADERS)
+    response.raise_for_status()
+    # if response.status_code == 403:
+    #     print(f"Rate limited when accessing {repo}")
+    #     sleep(3610) # rate limit for unauthenticated requests 60 requests per 1 hour and 5000 per hour for authenticated
+    #     crawl_repository(repo, collector)
+    #     raise Htt
+    #     return collector
+    # if response.status_code != 200:
+    #     print(f"Failed to fetch {repo}: {response.status_code}")
+    #     return collector
     has_shed_file = has_shed_yml(response.json())
     for entry in response.json():
         if entry['type'] == 'file' and entry['name'].lower().endswith('.xml') and has_shed_file:
@@ -219,10 +247,10 @@ def crawl_repository(repo, collector=None):
                 xml = fetch_xml(xml_url)
                 tool = parse_xml(xml, response.json(), repo)
                 if not tool:
-                    print(f"Skipping non-tool XML: {xml_url}")
+                    # print(f"Skipping non-tool XML: {xml_url}")
                     continue
                 collector.append(tool)
-                print(f"Tool: {tool.id}, Version: {tool.version}, Inputs: {tool.inputs}, Outputs: {tool.outputs}, Command: {tool.command}")
+                # print(f"Tool: {tool.id}, Version: {tool.version}, Inputs: {tool.inputs}, Outputs: {tool.outputs}, Command: {tool.command}")
             except Exception as e:
                 print(f"Error processing {xml_url}: {e}")
                 continue
@@ -231,15 +259,15 @@ def crawl_repository(repo, collector=None):
             crawl_repository(dir_url, collector)
     return collector
 
-if __name__ == "__main__":
-    unique_repos = get_unique_repositories()
-
-    for repo in unique_repos:
-
-        tools = crawl_repository(repo)
-        for tool in tools:
-            # print(f"Tool: {tool.id}, Version: {tool.version}, Inputs: {tool.inputs}, Outputs: {tool.outputs}, Command: {tool.command}")
-            print(f"Tool: {tool.id}, Version: {tool.version}, repo: {tool.repo_url}")
+# if __name__ == "__main__":
+#     unique_repos = get_unique_repositories()
+#
+#     for repo in unique_repos:
+#
+#         tools = crawl_repository(repo)
+#         for tool in tools:
+#             # print(f"Tool: {tool.id}, Version: {tool.version}, Inputs: {tool.inputs}, Outputs: {tool.outputs}, Command: {tool.command}")
+#             print(f"Tool: {tool.id}, Version: {tool.version}, repo: {tool.repo_url}")
 
 
     # print(f"{count}: name: {name}, repo: {remote_repository_url}, converted: {converted_repo_url}")

@@ -10,10 +10,25 @@ class DatabaseConfig:
     password: str
     name: str
 
+@dataclass(frozen=True)
+class GitConfig:
+    api_key: str
 
-def load_config(path: Path | None = None) -> DatabaseConfig:
+def load_git_config(path: Path | None = None) -> GitConfig:
     # path = path or Path(__file__).parent / "config/config.toml"
-    path = path or Path(__file__).parent.parent.parent / "config/config-local.toml"
+    path = path or Path(__file__).parent.parent.parent / "config/config.toml"
+
+    with path.open("rb") as f:
+        data = tomllib.load(f)
+
+    git = data["github"]
+    return GitConfig(
+        api_key=git["api_key"],
+    )
+
+def load_db_config(path: Path | None = None) -> DatabaseConfig:
+    # path = path or Path(__file__).parent / "config/config.toml"
+    path = path or Path(__file__).parent.parent.parent / "config/config.toml"
 
     with path.open("rb") as f:
         data = tomllib.load(f)

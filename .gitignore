@@ -2,6 +2,7 @@
 cache
 **/*_cache.sqlite
 **/config.toml
+*.dump
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

@@ -73,6 +73,9 @@ def process_single_repository(repo_url, session):
                         db_tool = Tool(
                             name=tool.id,
                             version=tool.version,
+                            description=tool.description,
+                            owner=tool.owner,
+                            categories=tool.categories,
                             command=tool.command.encode('utf-8') if tool.command else None,
                             source_type="galaxy",
                             source_url=tool.repo_url,
@@ -150,6 +153,9 @@ def process_pending_repositories():
                         db_tool = Tool(
                             name=tool.id,
                             version=tool.version,
+                            description=tool.description,
+                            owner=tool.owner,
+                            categories=tool.categories,
                             command=tool.command.encode('utf-8') if tool.command else None,
                             source_type="galaxy",
                             source_url=tool.repo_url,
@@ -354,8 +360,36 @@ def galaxy_test_flow():
     for tool in tools:
         print(f"Found tool: {tool.id}, version: {tool.version}")
 
+def galaxy_update_description_flow():
+    with Session(engine) as session:
+        tools = session.query(Tool).all()
+        for tool in tools:
+            if tool.description or tool.owner:
+                continue
+            try:
+                repo_url = tool.source_url
+                data = galaxy_toolshed.get_shed_yml(repo_url)
+                description = data.get('long_description', '')
+                short_description = data.get('description', '')
+                if not description:
+                    description = short_description
+                owner = data.get('owner', '')
+                categories = data.get('categories', [])
+                categories = [c.strip().lower() for c in categories if c.strip()]
+                tool.description = description
+                tool.owner = owner
+                tool.categories = categories
+                session.commit()
+                session.flush()
+                print(f"Updating tool {tool.name} owner: {owner}, categories: {categories}")
+            except Exception as e:
+                print(f"Error updating description for tool {tool.id}, {tool.name}, {tool.source_url}: {e}")
+                continue
+
 if __name__ == "__main__":
-    
+   
+    # galaxy_update_description_flow()
+    # print("Tool descriptions updated successfully.")
     repo_url="https://api.github.com/repos/WhoisDonlee/tools-iuc/contents"
     galaxy_single_repo_crawl_flow(repo_url)
     # galaxy_test_flow()

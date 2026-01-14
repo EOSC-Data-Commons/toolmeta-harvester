@@ -64,6 +64,10 @@ class Tool(Base):
     source_type = Column(Text, nullable=False)    # galaxy, cwl, nextflow, ...
     source_url = Column(Text)
 
+    description = Column(Text) 
+    categories = Column(ARRAY(Text))
+    owner = Column(Text)
+
     command = Column(LargeBinary)                         # extracted executable command
 
     raw = Column(LargeBinary, nullable=False)      # raw XML/YAML/JSON/etc.

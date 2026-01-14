@@ -3,6 +3,11 @@ cache
 **/*_cache.sqlite
 **/config.toml
 *.dump
+
+# alembic
+alembic.ini
+alembic/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

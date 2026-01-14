@@ -1,6 +1,7 @@
 import requests
 import requests_cache
 import json
+import yaml
 from time import sleep
 from dataclasses import dataclass
 from pathlib import Path
@@ -56,6 +57,12 @@ def is_cached(filename):
     return Path(filename).is_file()
 
 def fetch_xml(url):
+    # r = requests.get(url, timeout=30, headers=HEADERS)
+    # r.raise_for_status()
+    # return r.text
+    return fetch_text_file(url)
+
+def fetch_text_file(url):
     r = requests.get(url, timeout=30, headers=HEADERS)
     r.raise_for_status()
     return r.text
@@ -196,11 +203,22 @@ def parse_xml(tool_xml, dir_contents=None, repo_url=""):
     tool_id = tree.get("id")
     version = tree.get("version")
     command = tree.findtext("command")
+    shed_yml = get_shed_yml(repo_url)
+    description = shed_yml.get('long_description', '')
+    short_description = shed_yml.get('description', '')
+    if not description:
+        description = short_description
+    owner = shed_yml.get('owner', '')
+    categories = shed_yml.get('categories', [])
+    categories = [c.strip().lower() for c in categories if c.strip()]
 
     return ToolInfo(
         id=tool_id,
         tool_name=tool_name,
         version=version,
+        description=description,
+        owner=owner,
+        categories=categories,
         inputs=inputs,
         outputs=outputs,
         command=command,
@@ -292,6 +310,17 @@ def has_shed_yml(contents):
             return True
     return False
 
+def get_shed_yml(git_url):
+    contents = get_json(git_url)
+    for entry in contents:
+        if 'type' not in entry or 'name' not in entry:
+            continue
+        if entry['type'] == 'file' and entry['name'].lower() == '.shed.yml':
+            file_contents = fetch_text_file(entry['download_url'])
+            data = yaml.safe_load(file_contents)
+            return data
+    return False
+
 def get_git_tree(repo_api_url):
     parsed = urlparse(repo_api_url)
     parts = parsed.path.strip("/").split("/")
@@ -370,6 +399,7 @@ def crawl_repository(repo, collector=None):
             # try:
             xml = fetch_xml(xml_url)
             tool = parse_xml(xml, response.json(), repo)
+            
             if not tool:
                 # print(f"Skipping non-tool XML: {xml_url}")
                 continue

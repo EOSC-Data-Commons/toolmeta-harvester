@@ -184,6 +184,50 @@ def get_tools_connected_to_inputs(ga):
 
     return input_tools
 
+def get_outputs(ga):
+    steps = ga.get("steps", {})
+    outputs = []
+    ref_step_ids = {}
+    for s_id in list(steps.keys()):
+        ref_step_ids[s_id] = 0
+    for step_id, step in steps.items():
+        input_connections = step.get("input_connections", {})
+        for input_name, connection in input_connections.items():
+            conn_id = str(connection['id'])
+            if conn_id in ref_step_ids:
+                ref_step_ids[conn_id] += 1
+    for step_id, step in steps.items():
+        if ref_step_ids[step_id] == 0:
+            outputs.append({
+                "step_id": step_id,
+                "name": step.get("name"),
+                "label": step.get("label"),
+                "data_type": step.get("type"),
+                "tool_id": step.get("content_id", ""),
+            })
+    return outputs
+
+def get_shed_outputs(ga):
+    outputs_steps = get_outputs(ga)
+    output_tools = []
+    seen = set()
+    for output in outputs_steps:
+        tool_id = output.get("tool_id", "")
+        tool_name = get_shed_tool_name(tool_id)
+        # print(f"Output tool id: {tool_id}, name: {tool_name}")
+        if tool_name in seen:
+            continue
+        tool_meta = fetch_toolshed_tool(tool_id)[0]
+        # print(f"Tool meta: {tool_meta}")
+        repo_api_url = shed.convert_git_url_to_api(tool_meta['remote_repository_url'])
+        tools = shed.crawl_repository(repo_api_url)
+        for tool in tools:
+            if tool.id == tool_name:
+                output_tools.append(tool)
+                seen.add(tool_name)
+                break
+    return output_tools
+
 
 def get_inputs(ga):
     steps = ga.get("steps", {})
@@ -202,22 +246,39 @@ def get_inputs(ga):
 
     return inputs
 
+def get_shed_inputs(ga):
+    input_tool_ids = get_tools_connected_to_inputs(ga)
+    input_tools = []
+    seen = set()
+    for tool_id in input_tool_ids:
+        tool_name = get_shed_tool_name(tool_id)
+        if tool_name in seen:
+            continue
+        tool_meta = fetch_toolshed_tool(tool_id)[0]
+        repo_api_url = shed.convert_git_url_to_api(tool_meta['remote_repository_url'])
+        tools = shed.crawl_repository(repo_api_url)
+        for tool in tools:
+            if tool.id == tool_name:
+                input_tools.append(tool)
+                seen.add(tool_name)
+                break
+    return input_tools
+
 def test():
     workflows = get_hub_workflows(type="galaxy")
     print(f"Found {len(workflows)} Galaxy workflows on WorkflowHub")
     for wf in workflows:
         ga_w = get_ga_workflow(wf)
-        inputs = get_inputs(ga_w)
-        input_tools = get_tools_connected_to_inputs(ga_w)
-        for tool_id in input_tools:
-            tool_name = get_shed_tool_name(tool_id)
-            tool_meta = fetch_toolshed_tool(tool_id)[0]
-            repo_api_url = shed.convert_git_url_to_api(tool_meta['remote_repository_url'])
-            tools = shed.crawl_repository(repo_api_url)
-            for tool in tools:
-                if tool.id == tool_name:
-                    print(tool)
-
+        input_tools = get_shed_inputs(ga_w)
+        for tool in input_tools:
+            print(f"- {tool.id} ({tool.version})") 
+            print(f"Inputs: {tool.inputs}")
+            # print(tool)
+        output_tools = get_shed_outputs(ga_w)
+        for tool in output_tools:
+            print(f"+ {tool.id} ({tool.version})") 
+            print(f"Outputs: {tool.outputs}")
+            # print(tool)
         break
         
 test()

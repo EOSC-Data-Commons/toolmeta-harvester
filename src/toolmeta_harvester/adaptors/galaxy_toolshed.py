@@ -170,12 +170,9 @@ def parse_xml(tool_xml, dir_contents=None, repo_url=""):
     tool_name = tree.get("name")
     tool_id = tree.get("id")
     version = tree.get("version")
-    command = tree.findtext("command")
+    # command = tree.findtext("command")
     shed_yml = get_shed_yml(repo_url)
-    description = shed_yml.get('long_description', '')
-    short_description = shed_yml.get('description', '')
-    if not description:
-        description = short_description
+    description = tree.findtext("description") or shed_yml.get('long_description') or shed_yml.get('description') or ''
     owner = shed_yml.get('owner', '')
     categories = shed_yml.get('categories', [])
     categories = [c.strip().lower() for c in categories if c.strip()]

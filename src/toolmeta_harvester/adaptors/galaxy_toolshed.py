@@ -188,6 +188,31 @@ def parse_xml(tool_xml, dir_contents=None, repo_url=""):
         repo_url=repo_url,
     )
 
+def fetch_toolshed_tool(tool_id: str) -> dict:
+    """
+    Fetch ToolShed tool metadata (including wrapper XML) given a Galaxy tool_id.
+    """
+    parts = tool_id.split("/")
+    if not tool_id.startswith("toolshed."):
+        raise ValueError("Not a ToolShed tool_id")
+
+    # host = parts[0].replace("toolshed.", "")
+    host = parts[0]
+    owner = parts[2]
+    repo = parts[3]
+    revision = parts[-1]
+
+    url = f"https://{host}/api/repositories/get_repository_revision_install_info"
+    params = {
+        "name": repo,
+        "owner": owner,
+        "changeset_revision": revision,
+    }
+
+    r = requests.get(url, params=params, timeout=30)
+    r.raise_for_status()
+    return r.json()
+
 def load_repositories(use_cache=True):
     if use_cache and is_cached(CACHE_FILE):
         print("Loading registry from cache...")

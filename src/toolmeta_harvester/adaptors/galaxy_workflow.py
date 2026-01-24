@@ -1,29 +1,29 @@
-import requests
-import requests_cache
-import json
-from dataclasses import dataclass
-from pathlib import Path
-import zipfile
-import io
+# import requests
+# import requests_cache
+# import json
+# from dataclasses import dataclass
+# from pathlib import Path
+# import zipfile
+# import io
 from toolmeta_harvester.adaptors import galaxy_toolshed as shed
 
-TOOLShed = "https://toolshed.g2.bx.psu.edu"
-# BASE_URL = "http://usegalaxy.org/api"
-WORKFLOW_HUB_API = "https://workflowhub.eu/ga4gh/trs/v2/"
-
-
-
-# CACHE_FILE = "cache/usegalaxy_org_registry.json"
-HUB_CACHE_FILE = "cache/workflowhub_registry.json"
-
-HEADERS = {
-    "Accept": "application/json",
-}
-
-# Initialize requests cache 
-requests_cache.install_cache('workflowhub_org_cache', 
-                             backend='sqlite',
-                             expire_after=86400)
+# TOOLShed = "https://toolshed.g2.bx.psu.edu"
+# # BASE_URL = "http://usegalaxy.org/api"
+# WORKFLOW_HUB_API = "https://workflowhub.eu/ga4gh/trs/v2/"
+#
+#
+#
+# # CACHE_FILE = "cache/usegalaxy_org_registry.json"
+# HUB_CACHE_FILE = "cache/workflowhub_registry.json"
+#
+# HEADERS = {
+#     "Accept": "application/json",
+# }
+#
+# # Initialize requests cache 
+# requests_cache.install_cache('workflowhub_org_cache', 
+#                              backend='sqlite',
+#                              expire_after=86400)
 class WorkflowInfo:
     uuid: str
     name: str
@@ -37,82 +37,82 @@ class WorkflowInfo:
     toolshed_tools: list = []
 
 
-def get_json(url, result=None):
-    if not result:
-        result = []
-    r = requests.get(url, timeout=30, headers=HEADERS)
-    r.raise_for_status()
-    result.extend(r.json())
-    next_page = r.headers.get("next_page", None)
-    if next_page:
-        get_json(next_page, result)
-
-    return result
-
-def save_json(data, filename):
-    with open(filename, "w") as f:
-        json.dump(data, f, indent=2)
-
-def load_json(filename):
-    with open(filename, "r") as f:
-        return json.load(f)
-
-def is_cached(filename):
-    return Path(filename).is_file()
-
-def fetch_text_file(url):
-    r = requests.get(url, timeout=30, headers=HEADERS)
-    r.raise_for_status()
-    return r.text
-
-def retrieve_json(url, cache_file, use_cache=True):
-    if use_cache and is_cached(cache_file):
-        print("Loading registry from cache...")
-        return load_json(cache_file)
-    workflows = get_json(url)
-    save_json(workflows, cache_file)
-    return workflows
-
-def extract_galaxy_workflow_from_zip(url):
-    response = requests.get(url, timeout=30)
-    response.raise_for_status()
-
-    # Open ZIP in memory
-    with zipfile.ZipFile(io.BytesIO(response.content)) as zf:
-        ga_files = [name for name in zf.namelist() if name.endswith(".ga")]
-
-        if not ga_files:
-            raise ValueError("No .ga Galaxy workflow file found in ZIP")
-
-        # Take the first .ga file
-        ga_name = ga_files[0]
-
-        with zf.open(ga_name) as ga_file:
-            return json.load(ga_file)
-
-def get_hub_workflows(type=None):
-    workflows = retrieve_json(f"{WORKFLOW_HUB_API}/tools/", HUB_CACHE_FILE, True)
-    if not type:
-        return workflows
-    results = []
-    for w in workflows:
-        workflow_types = w['versions'][0]['descriptor_type']
-        workflow_type = workflow_types[0].lower() if len(workflow_types) > 0 else None
-        if workflow_type != type.lower():
-            continue
-        results.append(w)
-    return results
-
-def get_ga_workflow(w):
-    download_url = f"{w['url']}/download"
-    ga_workflow = extract_galaxy_workflow_from_zip(download_url)
-    return ga_workflow 
-
-def infer_input_datatype(step: dict) -> str | None:
-    outputs = step.get("outputs", [])
-    if not outputs:
-        return None
-    return outputs[0].get("type")
+# def get_json(url, result=None):
+#     if not result:
+#         result = []
+#     r = requests.get(url, timeout=30, headers=HEADERS)
+#     r.raise_for_status()
+#     result.extend(r.json())
+#     next_page = r.headers.get("next_page", None)
+#     if next_page:
+#         get_json(next_page, result)
+#
+#     return result
+#
+# def save_json(data, filename):
+#     with open(filename, "w") as f:
+#         json.dump(data, f, indent=2)
+#
+# def load_json(filename):
+#     with open(filename, "r") as f:
+#         return json.load(f)
+#
+# def is_cached(filename):
+#     return Path(filename).is_file()
+#
+# def fetch_text_file(url):
+#     r = requests.get(url, timeout=30, headers=HEADERS)
+#     r.raise_for_status()
+#     return r.text
+#
+# def retrieve_json(url, cache_file, use_cache=True):
+#     if use_cache and is_cached(cache_file):
+#         print("Loading registry from cache...")
+#         return load_json(cache_file)
+#     workflows = get_json(url)
+#     save_json(workflows, cache_file)
+#     return workflows
+#
+# def extract_galaxy_workflow_from_zip(url):
+#     response = requests.get(url, timeout=30)
+#     response.raise_for_status()
+#
+#     # Open ZIP in memory
+#     with zipfile.ZipFile(io.BytesIO(response.content)) as zf:
+#         ga_files = [name for name in zf.namelist() if name.endswith(".ga")]
+#
+#         if not ga_files:
+#             raise ValueError("No .ga Galaxy workflow file found in ZIP")
+#
+#         # Take the first .ga file
+#         ga_name = ga_files[0]
+#
+#         with zf.open(ga_name) as ga_file:
+#             return json.load(ga_file)
+#
+# def get_hub_workflows(type=None):
+#     workflows = retrieve_json(f"{WORKFLOW_HUB_API}/tools/", HUB_CACHE_FILE, True)
+#     if not type:
+#         return workflows
+#     results = []
+#     for w in workflows:
+#         workflow_types = w['versions'][0]['descriptor_type']
+#         workflow_type = workflow_types[0].lower() if len(workflow_types) > 0 else None
+#         if workflow_type != type.lower():
+#             continue
+#         results.append(w)
+#     return results
+#
+# def get_ga_workflow(w):
+#     download_url = f"{w['url']}/download"
+#     ga_workflow = extract_galaxy_workflow_from_zip(download_url)
+#     return ga_workflow 
+#
+# def infer_input_datatype(step: dict) -> str | None:
+#     outputs = step.get("outputs", [])
+#     if not outputs:
+#         return None
+#     return outputs[0].get("type")
 
 def get_step_shed_tools(ga):
     steps = ga.get("steps", {})
@@ -141,31 +141,31 @@ def get_shed_tool_name(tool_id: str) -> str:
     # revision = parts[-1]
     return tool_name
 
-def fetch_toolshed_tool(tool_id: str) -> dict:
-    """
-    Fetch ToolShed tool metadata (including wrapper XML) given a Galaxy tool_id.
-    """
-    parts = tool_id.split("/")
-    if not tool_id.startswith("toolshed."):
-        raise ValueError("Not a ToolShed tool_id")
-
-    # host = parts[0].replace("toolshed.", "")
-    host = parts[0]
-    owner = parts[2]
-    repo = parts[3]
-    revision = parts[-1]
-
-    url = f"https://{host}/api/repositories/get_repository_revision_install_info"
-    params = {
-        "name": repo,
-        "owner": owner,
-        "changeset_revision": revision,
-    }
-
-    r = requests.get(url, params=params, timeout=30)
-    r.raise_for_status()
-    return r.json()
-
+# def fetch_toolshed_tool(tool_id: str) -> dict:
+#     """
+#     Fetch ToolShed tool metadata (including wrapper XML) given a Galaxy tool_id.
+#     """
+#     parts = tool_id.split("/")
+#     if not tool_id.startswith("toolshed."):
+#         raise ValueError("Not a ToolShed tool_id")
+#
+#     # host = parts[0].replace("toolshed.", "")
+#     host = parts[0]
+#     owner = parts[2]
+#     repo = parts[3]
+#     revision = parts[-1]
+#
+#     url = f"https://{host}/api/repositories/get_repository_revision_install_info"
+#     params = {
+#         "name": repo,
+#         "owner": owner,
+#         "changeset_revision": revision,
+#     }
+#
+#     r = requests.get(url, params=params, timeout=30)
+#     r.raise_for_status()
+#     return r.json()
+#
 def get_tools_connected_to_inputs(ga):
     inputs = get_inputs(ga)
     input_step_ids = [inp['step_id'] for inp in inputs]
@@ -219,7 +219,7 @@ def get_shed_outputs(ga):
         # print(f"Output tool id: {tool_id}, name: {tool_name}")
         if tool_name in seen:
             continue
-        tool_meta = fetch_toolshed_tool(tool_id)[0]
+        tool_meta = shed.fetch_toolshed_tool(tool_id)[0]
         # print(f"Tool meta: {tool_meta}")
         repo_api_url = shed.convert_git_url_to_api(tool_meta['remote_repository_url'])
         if not repo_api_url:
@@ -264,7 +264,7 @@ def get_shed_inputs(ga):
             continue
         if tool_name in seen:
             continue
-        tool_meta = fetch_toolshed_tool(tool_id)[0]
+        tool_meta = shed.fetch_toolshed_tool(tool_id)[0]
         repo_api_url = shed.convert_git_url_to_api(tool_meta['remote_repository_url'])
         tools = shed.crawl_repository(repo_api_url)
         for tool in tools:
@@ -294,33 +294,33 @@ def parse_workflow(ga) -> WorkflowInfo:
 
     return wf_info
 
-def test():
-    workflows = get_hub_workflows(type="galaxy")
-    print(f"Found {len(workflows)} Galaxy workflows on WorkflowHub")
-    cnt = 0
-    for wf in workflows:
-        # try:
-        ga_w = get_ga_workflow(wf)
-        workflow_info = parse_workflow(ga_w)
-        workflow_info.url = wf['url']
-        workflow_info.description = wf.get('description', '')
-        print(f"Workflow UUID: {workflow_info.uuid}")
-        print(f"Name: {workflow_info.name}")
-        print(f"Version: {workflow_info.version}")
-        print(f"Description: {workflow_info.description}")
-        print(f"Tags: {', '.join(workflow_info.tags)}")
-        print(f"URL: {workflow_info.url}")
-        print(f"Toolshed tools used: {len(workflow_info.toolshed_tools)}")
-        print(f"Input data types: {len(workflow_info.inputs)}")
-        print(f"Output data types: {len(workflow_info.outputs)}")
-
-        print("-----------")
-        # except Exception as e:
-        #     print(f"Error processing workflow {wf['url']}: {e}")
-            # print(json.dumps(ga_w, indent=2))
-
-        cnt += 1
-        if cnt >= 5:
-            break
-        
-test()
+# def test():
+#     workflows = get_hub_workflows(type="galaxy")
+#     print(f"Found {len(workflows)} Galaxy workflows on WorkflowHub")
+#     cnt = 0
+#     for wf in workflows:
+#         # try:
+#         ga_w = get_ga_workflow(wf)
+#         workflow_info = parse_workflow(ga_w)
+#         workflow_info.url = wf['url']
+#         workflow_info.description = wf.get('description', '')
+#         print(f"Workflow UUID: {workflow_info.uuid}")
+#         print(f"Name: {workflow_info.name}")
+#         print(f"Version: {workflow_info.version}")
+#         print(f"Description: {workflow_info.description}")
+#         print(f"Tags: {', '.join(workflow_info.tags)}")
+#         print(f"URL: {workflow_info.url}")
+#         print(f"Toolshed tools used: {len(workflow_info.toolshed_tools)}")
+#         print(f"Input data types: {len(workflow_info.inputs)}")
+#         print(f"Output data types: {len(workflow_info.outputs)}")
+#
+#         print("-----------")
+#         # except Exception as e:
+#         #     print(f"Error processing workflow {wf['url']}: {e}")
+#             # print(json.dumps(ga_w, indent=2))
+#
+#         cnt += 1
+#         if cnt >= 5:
+#             break
+#         
+# test()

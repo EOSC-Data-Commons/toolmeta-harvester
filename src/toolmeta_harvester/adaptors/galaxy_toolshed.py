@@ -81,8 +81,8 @@ def extract_tokens(tree):
 
 def substitute_tokens(xml_str, tokens):
     for k, v in tokens.items():
-        if "VERSION" in k or "PREFIX" in k:
-            xml_str = xml_str.replace(k, v)
+        # if "VERSION" in k or "PREFIX" in k:
+        xml_str = xml_str.replace(k, v)
     return xml_str
 
 def parse_xml(tool_xml, dir_contents=None, repo_url=""):
@@ -116,13 +116,12 @@ def parse_xml(tool_xml, dir_contents=None, repo_url=""):
 
     # Tokens can be defined in the main tool XML as well
     tokens.update(extract_tokens(tree))
-    # new_xml = substitute_tokens(new_xml, tokens)
-    cnt = 0
-    while "VERSION@" in new_xml:
-        cnt += 1
+    # Substitute tokens until no changes
+    tmp_xml = None
+    while tmp_xml != new_xml: 
+        tmp_xml = new_xml
         new_xml = substitute_tokens(new_xml, tokens)
-        if cnt > 3:
-            break
+
 
     try:
         tree = etree.fromstring(new_xml.encode())

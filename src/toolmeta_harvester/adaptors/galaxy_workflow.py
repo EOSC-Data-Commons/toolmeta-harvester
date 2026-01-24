@@ -24,19 +24,17 @@ HEADERS = {
 requests_cache.install_cache('workflowhub_org_cache', 
                              backend='sqlite',
                              expire_after=86400)
-
-# @dataclass(frozen=True)
-# class ToolInfo:
-#     id: str
-#     tool_name: str
-#     version: str
-#     inputs: list
-#     outputs: list
-#     command: str
-#     repo_url: str
-#     raw: str
-#     raw_format: str = "json"
-#     tool_type: str = "galaxy_workflow"
+class WorkflowInfo:
+    uuid: str
+    name: str
+    description: str
+    url: str
+    version: str
+    tags: list = []
+    inputs: list = []
+    outputs: list = []
+    steps: list = []
+    toolshed_tools: list = []
 
 
 def get_json(url, result=None):
@@ -122,7 +120,7 @@ def get_step_shed_tools(ga):
     for step_id, step in steps.items():
         step_type = step.get("type")
         if step_type == 'tool':
-            tool_id = step.get("tool_id")
+            tool_id = step.get("tool_id") or step.get("content_id")
             # print(tool_id)
             if tool_id.startswith("toolshed"):
                 tools.append(tool_id)
@@ -137,7 +135,7 @@ def get_shed_tool_name(tool_id: str) -> str:
     """
     parts = tool_id.split("/")
     if not tool_id.startswith("toolshed."):
-        raise ValueError("Not a ToolShed tool_id")
+        raise ValueError(f"Not a ToolShed tool_id: {tool_id}")
     # repo_name = parts[3]
     tool_name = parts[4]
     # revision = parts[-1]
@@ -180,7 +178,7 @@ def get_tools_connected_to_inputs(ga):
             for input_name, connection in input_connections.items():
                 conn_id = str(connection['id'])
                 if conn_id in input_step_ids:
-                    input_tools.append(step.get("content_id"))
+                    input_tools.append(step.get("tool_id") or step.get("content_id"))
 
     return input_tools
 
@@ -203,7 +201,7 @@ def get_outputs(ga):
                 "name": step.get("name"),
                 "label": step.get("label"),
                 "data_type": step.get("type"),
-                "tool_id": step.get("content_id", ""),
+                "tool_id": step.get("content_id") or step.get("tool_id"),
             })
     return outputs
 
@@ -264,21 +262,53 @@ def get_shed_inputs(ga):
                 break
     return input_tools
 
+def parse_workflow(ga) -> WorkflowInfo:
+    wf_info = WorkflowInfo()
+    wf_info.uuid = ga.get("uuid", "")
+    wf_info.name = ga.get("name", "")
+    wf_info.version = ga.get("version", '')
+    wf_info.tags = ga.get("tags", [])
+    wf_info.description = ga.get("description", "")
+    wf_info.toolshed_tools = get_step_shed_tools(ga)
+
+    input_tools = get_shed_inputs(ga)
+    for tool in input_tools:
+        for input in tool.inputs:
+            wf_info.inputs.append(input)
+    output_tools = get_shed_outputs(ga)
+    for tool in output_tools:
+        for output in tool.outputs:
+            wf_info.outputs.append(output)
+
+    return wf_info
+
 def test():
     workflows = get_hub_workflows(type="galaxy")
     print(f"Found {len(workflows)} Galaxy workflows on WorkflowHub")
+    cnt = 0
     for wf in workflows:
-        ga_w = get_ga_workflow(wf)
-        input_tools = get_shed_inputs(ga_w)
-        for tool in input_tools:
-            print(f"- {tool.id} ({tool.version})") 
-            print(f"Inputs: {tool.inputs}")
-            # print(tool)
-        output_tools = get_shed_outputs(ga_w)
-        for tool in output_tools:
-            print(f"+ {tool.id} ({tool.version})") 
-            print(f"Outputs: {tool.outputs}")
-            # print(tool)
-        break
+        try:
+            ga_w = get_ga_workflow(wf)
+            workflow_info = parse_workflow(ga_w)
+            workflow_info.url = wf['url']
+            workflow_info.description = wf.get('description', '')
+            print(f"Workflow UUID: {workflow_info.uuid}")
+            print(f"Name: {workflow_info.name}")
+            print(f"Version: {workflow_info.version}")
+            print(f"Description: {workflow_info.description}")
+            print(f"Tags: {', '.join(workflow_info.tags)}")
+            print(f"URL: {workflow_info.url}")
+            print(f"Toolshed tools used: {len(workflow_info.toolshed_tools)}")
+            print(f"Input data types: {len(workflow_info.inputs)}")
+            print(f"Output data types: {len(workflow_info.outputs)}")
+
+            print("-----------")
+        except Exception as e:
+            print(f"Error processing workflow {wf['url']}: {e}")
+            print(json.dumps(ga_w, indent=2))
+
+        cnt += 1
+        if cnt >= 5:
+            break
         
 test()

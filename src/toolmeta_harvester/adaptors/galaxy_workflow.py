@@ -211,13 +211,21 @@ def get_shed_outputs(ga):
     seen = set()
     for output in outputs_steps:
         tool_id = output.get("tool_id", "")
-        tool_name = get_shed_tool_name(tool_id)
+        try:
+            tool_name = get_shed_tool_name(tool_id)
+        except ValueError:
+            print(f"Skipping non-ToolShed tool_id: {tool_id}")
+            continue
         # print(f"Output tool id: {tool_id}, name: {tool_name}")
         if tool_name in seen:
             continue
         tool_meta = fetch_toolshed_tool(tool_id)[0]
         # print(f"Tool meta: {tool_meta}")
         repo_api_url = shed.convert_git_url_to_api(tool_meta['remote_repository_url'])
+        if not repo_api_url:
+            print(f"Could not convert git URL to API URL: {tool_meta['remote_repository_url']}")
+            print(tool_meta)
+            continue
         tools = shed.crawl_repository(repo_api_url)
         for tool in tools:
             if tool.id == tool_name:
@@ -249,7 +257,11 @@ def get_shed_inputs(ga):
     input_tools = []
     seen = set()
     for tool_id in input_tool_ids:
-        tool_name = get_shed_tool_name(tool_id)
+        try:
+            tool_name = get_shed_tool_name(tool_id)
+        except ValueError:
+            print(f"Skipping non-ToolShed tool_id: {tool_id}")
+            continue
         if tool_name in seen:
             continue
         tool_meta = fetch_toolshed_tool(tool_id)[0]
@@ -287,25 +299,25 @@ def test():
     print(f"Found {len(workflows)} Galaxy workflows on WorkflowHub")
     cnt = 0
     for wf in workflows:
-        try:
-            ga_w = get_ga_workflow(wf)
-            workflow_info = parse_workflow(ga_w)
-            workflow_info.url = wf['url']
-            workflow_info.description = wf.get('description', '')
-            print(f"Workflow UUID: {workflow_info.uuid}")
-            print(f"Name: {workflow_info.name}")
-            print(f"Version: {workflow_info.version}")
-            print(f"Description: {workflow_info.description}")
-            print(f"Tags: {', '.join(workflow_info.tags)}")
-            print(f"URL: {workflow_info.url}")
-            print(f"Toolshed tools used: {len(workflow_info.toolshed_tools)}")
-            print(f"Input data types: {len(workflow_info.inputs)}")
-            print(f"Output data types: {len(workflow_info.outputs)}")
+        # try:
+        ga_w = get_ga_workflow(wf)
+        workflow_info = parse_workflow(ga_w)
+        workflow_info.url = wf['url']
+        workflow_info.description = wf.get('description', '')
+        print(f"Workflow UUID: {workflow_info.uuid}")
+        print(f"Name: {workflow_info.name}")
+        print(f"Version: {workflow_info.version}")
+        print(f"Description: {workflow_info.description}")
+        print(f"Tags: {', '.join(workflow_info.tags)}")
+        print(f"URL: {workflow_info.url}")
+        print(f"Toolshed tools used: {len(workflow_info.toolshed_tools)}")
+        print(f"Input data types: {len(workflow_info.inputs)}")
+        print(f"Output data types: {len(workflow_info.outputs)}")
 
-            print("-----------")
-        except Exception as e:
-            print(f"Error processing workflow {wf['url']}: {e}")
-            print(json.dumps(ga_w, indent=2))
+        print("-----------")
+        # except Exception as e:
+        #     print(f"Error processing workflow {wf['url']}: {e}")
+            # print(json.dumps(ga_w, indent=2))
 
         cnt += 1
         if cnt >= 5:

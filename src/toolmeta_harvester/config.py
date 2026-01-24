@@ -14,6 +14,25 @@ class DatabaseConfig:
 class GitConfig:
     api_key: str
 
+@dataclass(frozen=True)
+class GalaxyConfig:
+    api_key: str
+    host_url: str
+
+
+def load_galaxy_config(path: Path | None = None) -> GitConfig:
+    # path = path or Path(__file__).parent / "config/config.toml"
+    path = path or Path(__file__).parent.parent.parent / "config/config.toml"
+
+    with path.open("rb") as f:
+        data = tomllib.load(f)
+
+    galaxy = data["galaxy_local"]
+    return GalaxyConfig(
+        api_key=galaxy["api_key"],
+        host_url=galaxy["host_url"]
+    )
+
 def load_git_config(path: Path | None = None) -> GitConfig:
     # path = path or Path(__file__).parent / "config/config.toml"
     path = path or Path(__file__).parent.parent.parent / "config/config.toml"

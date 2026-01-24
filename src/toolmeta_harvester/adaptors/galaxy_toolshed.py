@@ -2,7 +2,7 @@ import requests
 import requests_cache
 import json
 import yaml
-from time import sleep
+from urllib.parse import urljoin
 from dataclasses import dataclass
 from pathlib import Path
 from lxml import etree
@@ -32,13 +32,14 @@ requests_cache.install_cache('toolshed_cache',
 class ToolInfo:
     id: str
     tool_name: str
+    owner: str
     version: str
+    description: str
+    categories: list
     inputs: list
     outputs: list
-    command: str
     repo_url: str
-    raw: str
-    raw_format: str = "xml"
+    tool_type: str = "galaxy_tool"
 
 def get_json(url):
     r = requests.get(url, timeout=30, headers=HEADERS)
@@ -84,29 +85,6 @@ def substitute_tokens(xml_str, tokens):
             xml_str = xml_str.replace(k, v)
     return xml_str
 
-# def collect_macros(tree):
-#     macros = {}
-#     for xml_macro in tree.xpath("//xml[@name]"):
-#         macros[xml_macro.get("name")] = list(xml_macro)
-#     return macros
-#
-# def expand_macros(tree, macros):
-#     for expand in tree.xpath("//expand[@macro]"):
-#         name = expand.get("macro")
-#
-#         if name not in macros:
-#             continue
-#
-#         parent = expand.getparent()
-#         index = parent.index(expand)
-#
-#         for node in macros[name]:
-#             parent.insert(index, etree.fromstring(etree.tostring(node)))
-#             index += 1
-#
-#         parent.remove(expand)
-
-
 def parse_xml(tool_xml, dir_contents=None, repo_url=""):
     try:
         tree = etree.fromstring(tool_xml.encode())
@@ -130,21 +108,11 @@ def parse_xml(tool_xml, dir_contents=None, repo_url=""):
             # print(f"Error fetching macro file {macro_file} from {macro_url}: {e}")
             # Some macro.xml files use relative paths
             if macro_xml.startswith("../"):
-                parts = macro_xml.split("/")
-                filename = parts[-1]
-                macro_url_parts = macro_url.split("/")
-                macro_url_parts.pop()
-                for p in parts:
-                    if p == "..":
-                        macro_url_parts.pop()
-                macro_url_parts.append(filename)
-                macro_url = "/".join(macro_url_parts)
-                # print(f"Trying alternative path: {macro_url}")
+                macro_url = urljoin(macro_url, macro_xml)
+                print(macro_url)
                 macro_xml = fetch_xml(macro_url)
                 macro_tree = etree.fromstring(macro_xml.encode())
         tokens.update(extract_tokens(macro_tree))
-        # new_xml = substitute_tokens(new_xml, tokens)
-        # new_xml = substitute_tokens(new_xml, tokens)
 
     # Tokens can be defined in the main tool XML as well
     tokens.update(extract_tokens(tree))
@@ -221,9 +189,7 @@ def parse_xml(tool_xml, dir_contents=None, repo_url=""):
         categories=categories,
         inputs=inputs,
         outputs=outputs,
-        command=command,
         repo_url=repo_url,
-        raw=new_xml,
     )
 
 def load_repositories(use_cache=True):
@@ -380,6 +346,8 @@ def crawl_repository(repo, collector=None):
         return collector
     print(f"Crawling repository: {repo}")
     response = requests.get(repo, timeout=30, headers=HEADERS)
+    # print(f"Response status code: {response.status_code} for {repo}")
+    # print(response.text)
     response.raise_for_status()
     # if response.status_code == 403:
     #     print(f"Rate limited when accessing {repo}")

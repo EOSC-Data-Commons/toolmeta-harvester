@@ -93,11 +93,15 @@ def get_shed_outputs(ga):
             if not repo_api_url:
                 logger.warning(f"Could not convert git URL to API URL: {tool_meta['remote_repository_url']}")
                 continue
-            tools = shed.crawl_repository(repo_api_url)
-            for tool in tools:
-                if tool.id == tool_name:
-                    output_tools.append(tool)
-                    seen.add(tool_name)
+            # tools = shed.crawl_repository(repo_api_url)
+            for url, tools in shed.smart_crawl_repository_iter(repo_api_url):
+                for tool in tools:
+                    if tool.id == tool_name:
+                        output_tools.append(tool)
+                        seen.add(tool_name)
+                        break
+                # Break outer loop once tool is found
+                if tool_name in seen:
                     break
         except Exception:
             logger.exception(f"Retrieving output shed tool: {tool_id}, skipping...")
@@ -132,7 +136,7 @@ def get_shed_inputs(ga):
                 continue
             tool_meta = shed.fetch_toolshed_tool(tool_id)[0]
             repo_api_url = shed.convert_git_url_to_api(tool_meta['remote_repository_url'])
-            tools = shed.crawl_repository(repo_api_url)
+            # tools = shed.crawl_repository(repo_api_url)
             for url, tools in shed.smart_crawl_repository_iter(repo_api_url):
                 for tool in tools:
                     if tool.id == tool_name:

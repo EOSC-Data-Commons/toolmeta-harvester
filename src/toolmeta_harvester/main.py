@@ -1,4 +1,10 @@
+import logging
 from toolmeta_harvester.adaptors import galaxy_workflow_hub as gwh
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(name)s %(levelname)s: %(message)s",
+)
 
 def main():
     # Get first n workflows from Galaxy Workflow Hub

@@ -1,3 +1,4 @@
+import logging
 import requests
 import requests_cache
 import json
@@ -6,6 +7,14 @@ from pathlib import Path
 import zipfile
 import io
 from toolmeta_harvester.adaptors import galaxy_workflow as ga_workflow
+from toolmeta_harvester.adaptors import galaxy_toolshed as shed
+
+logger = logging.getLogger(__name__)
+# logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(name)s %(levelname)s: %(message)s",
+)
 
 TOOLShed = "https://toolshed.g2.bx.psu.edu"
 WORKFLOW_HUB_API = "https://workflowhub.eu/ga4gh/trs/v2/"
@@ -275,6 +284,16 @@ def get_ga_workflow(w):
 #             wf_info.outputs.append(output)
 #
 #     return wf_info
+def test_shed():
+    url = "https://api.github.com/repos/galaxyproject/tools-iuc/contents/tools/unicycler"
+    for url, tools in shed.smart_crawl_repository_iter(url):
+        print(f"Crawled URL: {url}")
+        for tool in tools:
+            print(f"Tool ID: {tool.id}")
+            print(f"Version: {tool.version}")
+            print(f"Description: {tool.description}")
+            print(f"Inputs: {len(tool.inputs)}")
+            print(f"Outputs: {len(tool.outputs)}")
 
 def test():
     workflows = get_hub_workflows(type="galaxy")
@@ -305,4 +324,5 @@ def test():
         if cnt >= 5:
             break
         
+# test_shed()
 test()

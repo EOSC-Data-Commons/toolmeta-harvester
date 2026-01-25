@@ -1,7 +1,9 @@
+import logging
 import requests
 import requests_cache
 import json
 import yaml
+from time import sleep
 from urllib.parse import urljoin
 from dataclasses import dataclass
 from pathlib import Path
@@ -9,6 +11,8 @@ from lxml import etree
 from lxml.etree import XMLSyntaxError
 from urllib.parse import urlparse
 from toolmeta_harvester.config import load_git_config
+
+logger = logging.getLogger(__name__)
 
 TOOLShed = "https://toolshed.g2.bx.psu.edu"
 CACHE_FILE = "cache/toolshed_registry.json"
@@ -88,7 +92,9 @@ def substitute_tokens(xml_str, tokens):
 def parse_xml(tool_xml, dir_contents=None, repo_url=""):
     try:
         tree = etree.fromstring(tool_xml.encode())
-    except XMLSyntaxError as e:
+    except XMLSyntaxError:
+        # This captures errors wher the XML file contains a reference to
+        # a macro file e.g. ../macro.xml. The file itself is not XML
         return None
 
     if tree.tag != "tool":
@@ -97,7 +103,7 @@ def parse_xml(tool_xml, dir_contents=None, repo_url=""):
     new_xml = tool_xml
     tokens = {}
     for macro_file in macro_files:
-        # print("Processing macro file:", macro_file)
+        logger.debug("Processing macro file:", macro_file)
         macro_url = get_file_url(dir_contents or [], macro_file)
         if not macro_url:
             continue
@@ -105,29 +111,34 @@ def parse_xml(tool_xml, dir_contents=None, repo_url=""):
         try:
             macro_tree = etree.fromstring(macro_xml.encode())
         except XMLSyntaxError as e:
-            # print(f"Error fetching macro file {macro_file} from {macro_url}: {e}")
             # Some macro.xml files use relative paths
             if macro_xml.startswith("../"):
+                logger.debug(f"Retrying macro file with relative path: {macro_file}")
                 macro_url = urljoin(macro_url, macro_xml)
-                print(macro_url)
                 macro_xml = fetch_xml(macro_url)
                 macro_tree = etree.fromstring(macro_xml.encode())
+            else:
+                logger.error(f"Error parsing macro file {macro_file} from {macro_url}: {e}")
+                continue
         tokens.update(extract_tokens(macro_tree))
 
     # Tokens can be defined in the main tool XML as well
     tokens.update(extract_tokens(tree))
     # Substitute tokens until no changes
+    # Expanding the tokens can break the XML structure, so we need to do it iteratively
     tmp_xml = None
     while tmp_xml != new_xml: 
         tmp_xml = new_xml
         new_xml = substitute_tokens(new_xml, tokens)
+        # Test if the new XML is valid
+        try:
+            etree.fromstring(new_xml.encode())
+        except XMLSyntaxError:
+            logger.debug("Substituted XML is invalid, stopping token substitution.")
+            new_xml = tmp_xml
+            break
 
-
-    try:
-        tree = etree.fromstring(new_xml.encode())
-    except Exception as e:
-        print("Error parsing XML after token substitution:", e)
-        print(new_xml)
+    tree = etree.fromstring(new_xml.encode())
     inputs = []
     outputs = []
     for param in tree.xpath(".//inputs//*"):
@@ -215,7 +226,7 @@ def fetch_toolshed_tool(tool_id: str) -> dict:
 
 def load_repositories(use_cache=True):
     if use_cache and is_cached(CACHE_FILE):
-        print("Loading registry from cache...")
+        logger.info("Loading registry from cache...")
         return load_json(CACHE_FILE)
 
     repos = get_json(f"{TOOLShed}/api/repositories")
@@ -329,75 +340,88 @@ def strip_query(url: str) -> str:
     p = urlparse(url)
     return f"{p.scheme}://{p.netloc}{p.path}"
 
+def extract_base_path(repo_api_url: str) -> str:
+    path = urlparse(repo_api_url).path
+    return path.split("/contents/", 1)[1].rstrip("/")
+
+def compare_base_path(base_path:str, item_path:str) -> bool:
+    if not base_path or base_path == "/":
+        return True
+    base_parts = base_path.strip("/").split("/")
+    item_parts = item_path.strip("/").split("/")
+    for b, i in zip(base_parts, item_parts):
+        if b != i:
+            return False
+    return True
 
 def get_tool_folders(repo_api_url):
     branch, file_tree = get_git_tree(repo_api_url)
+    base_path = extract_base_path(repo_api_url)
     file_list = file_tree.get("tree", [])
     tool_folders = set()
     for item in file_list:
-        if item["type"] == "blob" and item["path"].lower().endswith(".shed.yml"):
+        if (
+                item["type"] == "blob" 
+                and item["path"].lower().endswith(".shed.yml")
+                and compare_base_path(base_path, item["path"])
+            ):
+            
             folder = "/".join(item["path"].split("/")[:-1])
+            if folder.startswith(base_path):
+                folder = folder[len(base_path):]
             folder = f"{strip_query(repo_api_url)}/{folder}?ref={branch}"
-            # print("Found tool folder:", folder)
+            logger.debug("Found tool url folder:", folder)
             tool_folders.add(folder)
     return list(tool_folders)
 
+# Crawl only the tool folders in a repository
 def smart_crawl_repository(repo_api_url):
     tool_folders = get_tool_folders(repo_api_url)
+    logger.debug(f"Smart crawling repository: {repo_api_url} with {len(tool_folders)} tool folders")
     collector = []
     for url in tool_folders:
-        # print("Crawling tool folder:", url)
         tools = crawl_repository(url)
-        print(f"Found {len(tools)} tools in {url}")
+        logger.debug(f"Found {len(tools)} tools in {url}")
         collector.extend(tools)
     return collector
 
+# Generator version of s mart_crawl_repository
 def smart_crawl_repository_iter(repo_api_url):
     tool_folders = get_tool_folders(repo_api_url)
+    logger.debug(f"Smart crawling repository: {repo_api_url} with {len(tool_folders)} tool folders")
     for url in tool_folders:
-        # print("Crawling tool folder:", url)
         tools = crawl_repository(url)
-        print(f"Found {len(tools)} tools in {url}")
+        logger.debug(f"Found {len(tools)} tools in {url}")
         yield (url, tools)
 
+# Recursively crawl a repository URL for Galaxy tool XML files
 def crawl_repository(repo, collector=None):
     if collector is None:
         collector = []
     if "depricated" in repo.lower():
         return collector
-    print(f"Crawling repository: {repo}")
+    logger.info(f"Crawling repository: {repo}")
     response = requests.get(repo, timeout=30, headers=HEADERS)
-    # print(f"Response status code: {response.status_code} for {repo}")
-    # print(response.text)
+    logger.debug(f"Response status code: {response.status_code} for {repo}")
+    if response.status_code == 403:
+        logger.error(f"Rate limited when accessing {repo}")
+        logger.info("Sleeping for 1 hour to avoid rate limiting...")
+        sleep(3610) # github rate limit for unauthenticated requests 60 requests per 1 hour and 5000 per hour for authenticated
+        return crawl_repository(repo, collector)
+    
+    # If not 200 or 403, raise error
     response.raise_for_status()
-    # if response.status_code == 403:
-    #     print(f"Rate limited when accessing {repo}")
-    #     sleep(3610) # rate limit for unauthenticated requests 60 requests per 1 hour and 5000 per hour for authenticated
-    #     crawl_repository(repo, collector)
-    #     raise Htt
-    #     return collector
-    # if response.status_code != 200:
-    #     print(f"Failed to fetch {repo}: {response.status_code}")
-    #     return collector
     has_shed_file = has_shed_yml(response.json())
     for entry in response.json():
         if 'type' not in entry or 'name' not in entry:
             continue
         if entry['type'] == 'file' and entry['name'].lower().endswith('.xml') and has_shed_file:
             xml_url = entry['download_url']
-            # try:
             xml = fetch_xml(xml_url)
             tool = parse_xml(xml, response.json(), repo)
-            
             if not tool:
-                # print(f"Skipping non-tool XML: {xml_url}")
                 continue
             collector.append(tool)
-            # print(f"Tool: {tool.id}, Version: {tool.version}, Inputs: {tool.inputs}, Outputs: {tool.outputs}, Command: {tool.command}")
-            # print(f"Tool: {tool.id}, Version: {tool.version}")
-            # except Exception as e:
-            #     print(f"Error processing {xml_url}: {e}")
-            #     continue
         if entry["type"] == "dir" and not has_shed_file:
             dir_url = entry["url"]
             crawl_repository(dir_url, collector)

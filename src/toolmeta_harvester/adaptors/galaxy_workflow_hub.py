@@ -2,15 +2,12 @@ import logging
 import requests
 import requests_cache
 import json
-from dataclasses import dataclass
 from pathlib import Path
 import zipfile
 import io
 from toolmeta_harvester.adaptors import galaxy_workflow as ga_workflow
-from toolmeta_harvester.adaptors import galaxy_toolshed as shed
 
 logger = logging.getLogger(__name__)
-# logging.basicConfig(level=logging.INFO)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(name)s %(levelname)s: %(message)s",
@@ -284,45 +281,44 @@ def get_ga_workflow(w):
 #             wf_info.outputs.append(output)
 #
 #     return wf_info
-def test_shed():
-    url = "https://api.github.com/repos/galaxyproject/tools-iuc/contents/tools/unicycler"
-    for url, tools in shed.smart_crawl_repository_iter(url):
-        print(f"Crawled URL: {url}")
-        for tool in tools:
-            print(f"Tool ID: {tool.id}")
-            print(f"Version: {tool.version}")
-            print(f"Description: {tool.description}")
-            print(f"Inputs: {len(tool.inputs)}")
-            print(f"Outputs: {len(tool.outputs)}")
 
-def test():
+def iter_workflows():
     workflows = get_hub_workflows(type="galaxy")
-    print(f"Found {len(workflows)} Galaxy workflows on WorkflowHub")
-    cnt = 0
     for wf in workflows:
-        # try:
         ga_w = get_ga_workflow(wf)
         workflow_info = ga_workflow.parse_workflow(ga_w)
         workflow_info.url = wf['url']
         workflow_info.description = wf.get('description', '')
-        print(f"Workflow UUID: {workflow_info.uuid}")
-        print(f"Name: {workflow_info.name}")
-        print(f"Version: {workflow_info.version}")
-        print(f"Description: {workflow_info.description}")
-        print(f"Tags: {', '.join(workflow_info.tags)}")
-        print(f"URL: {workflow_info.url}")
-        print(f"Toolshed tools used: {len(workflow_info.toolshed_tools)}")
-        print(f"Input data types: {len(workflow_info.inputs)}")
-        print(f"Output data types: {len(workflow_info.outputs)}")
+        yield workflow_info
 
-        print("-----------")
-        # except Exception as e:
-        #     print(f"Error processing workflow {wf['url']}: {e}")
-            # print(json.dumps(ga_w, indent=2))
-
-        cnt += 1
-        if cnt >= 5:
-            break
-        
-# test_shed()
-test()
+# def test():
+#     workflows = get_hub_workflows(type="galaxy")
+#     print(f"Found {len(workflows)} Galaxy workflows on WorkflowHub")
+#     cnt = 0
+#     for wf in workflows:
+#         # try:
+#         ga_w = get_ga_workflow(wf)
+#         workflow_info = ga_workflow.parse_workflow(ga_w)
+#         workflow_info.url = wf['url']
+#         workflow_info.description = wf.get('description', '')
+#         print(f"Workflow UUID: {workflow_info.uuid}")
+#         print(f"Name: {workflow_info.name}")
+#         print(f"Version: {workflow_info.version}")
+#         print(f"Description: {workflow_info.description}")
+#         print(f"Tags: {', '.join(workflow_info.tags)}")
+#         print(f"URL: {workflow_info.url}")
+#         print(f"Toolshed tools used: {len(workflow_info.toolshed_tools)}")
+#         print(f"Input data types: {len(workflow_info.inputs)}")
+#         print(f"Output data types: {len(workflow_info.outputs)}")
+#
+#         print("-----------")
+#         # except Exception as e:
+#         #     print(f"Error processing workflow {wf['url']}: {e}")
+#             # print(json.dumps(ga_w, indent=2))
+#
+#         cnt += 1
+#         if cnt >= 5:
+#             break
+#         
+# # test_shed()
+# test()

@@ -1,5 +1,5 @@
 **/.DS_Store
-cache
+cache/
 **/*_cache.sqlite
 **/config.toml
 *.dump

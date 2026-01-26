@@ -14,35 +14,5 @@ services:
     volumes:
       - toolsdb_postgres_data:/var/lib/postgresql/data
 
-  # prefect:
-  #   # restart: unless-stopped
-  #   image: local/prefect-server:latest
-  #   build:
-  #     context: .
-  #     dockerfile: prefect.Dockerfile
-  #   container_name: prefect_server
-  #   ports:
-  #     - "4200:4200" # UI/API
-  #   command: prefect server start --host 0.0.0.0 --port 4200
-  #
-  # prefect-client:
-  #   # restart: unless-stopped
-  #   build:
-  #     context: .
-  #     dockerfile: pipelines.Dockerfile
-  #   container_name: prefect_client
-  #   depends_on:
-  #     - postgres
-  #     - prefect
-  #   environment:
-  #     PREFECT_API_URL: "http://prefect:4200/api"
-  #   command: uv run uv run deployments/create_deployments.py
-  #   volumes:
-  #     - ./src:/app/src
-  #     - ./deployments:/app/deployments
-  #     - ./config/config-docker.toml:/app/config/config.toml
-  #     - ./config/harvester.toml:/app/config/harvester.toml
-  #   working_dir: /app
-
 volumes:
   toolsdb_postgres_data:

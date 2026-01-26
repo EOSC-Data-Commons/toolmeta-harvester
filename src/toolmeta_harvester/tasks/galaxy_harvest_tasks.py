@@ -1,4 +1,4 @@
-import json
+import logging
 from toolmeta_harvester.db.engine import engine
 from toolmeta_harvester.db.models import (
     Base,
@@ -13,6 +13,8 @@ from requests.exceptions import HTTPError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+
+logger = logging.getLogger(__name__)
 
 
 def create_tables():
@@ -39,8 +41,7 @@ def populate_harvests_table_with_shed_tools():
 def get_tools_from_db():
     """Retrieve all tools from the database."""
     with Session(engine) as session:
-        tools = session.query(ShedTool.id, ShedTool.name,
-                              ShedTool.version).all()
+        tools = session.query(ShedTool.id, ShedTool.name, ShedTool.version).all()
         return tools
 
 
@@ -65,7 +66,7 @@ def get_all_repositories():
             .all()
         )
         for repo in error_repos:
-            print(f"Repository: {repo.url} with status: {repo.status}")
+            logger.debug(f"Repository: {repo.url} with status: {repo.status}")
 
 
 def process_single_repository(repo_url, session):
@@ -78,8 +79,9 @@ def process_single_repository(repo_url, session):
         if len(results) > 0:
             repo = results[0]
             if repo.status == "completed":
-                print(f"Repository {
-                      url} already exists in the database. Skipping.")
+                logger.debug(
+                    f"Repository {url} already exists in the database. Skipping."
+                )
                 continue
         else:
             repo = ArtifactHarvest(
@@ -98,7 +100,7 @@ def process_single_repository(repo_url, session):
                 session.flush()
 
         except Exception as e:
-            print(f"Error processing repository {url}: {e}")
+            logger.error(f"Error processing repository {url}: {e}")
             repo.status = "error"
             session.commit()
             session.flush()
@@ -127,13 +129,14 @@ def add_workflow_to_db(wf, session):
         )
         session.add(db_wf)
         session.flush()  # Ensure db_tool.id is populated
-        print(f"Adding workflow: {db_wf.id}, {
-              db_wf.name}, version: {db_wf.version}")
+        logger.info(
+            f"Adding workflow: {db_wf.id}, {db_wf.name}, version: {db_wf.version}"
+        )
 
         session.commit()
         session.flush()
     except IntegrityError as e:
-        print(f"IntegrityError for workflow tool {db_wf.id}: {e}")
+        logger.error(f"IntegrityError for workflow tool {db_wf.id}: {e}")
         session.rollback()
 
 
@@ -155,11 +158,12 @@ def add_tool_to_db(tool, session):
         session.add(db_tool)
         # session.commit()
         session.flush()  # Ensure db_tool.id is populated
-        print(f"Adding tool: {db_tool.id}, {
-              db_tool.name}, version: {db_tool.version}")
+        logger.info(
+            f"Adding tool: {db_tool.id}, {db_tool.name}, version: {db_tool.version}"
+        )
 
         for input in tool.inputs:
-            print(f"Processing input: {input}")
+            logger.debug(f"Processing input: {input}")
             db_input = ShedToolInput(
                 tool_uri=db_tool.uri,
                 name=input["name"],
@@ -167,8 +171,7 @@ def add_tool_to_db(tool, session):
                 format=[],
                 label=input.get("label"),
             )
-            formats = input.get("format").split(
-                ",") if input.get("format") else []
+            formats = input.get("format").split(",") if input.get("format") else []
             for fmt in formats:
                 db_input.format.append(fmt.strip())
 
@@ -184,8 +187,7 @@ def add_tool_to_db(tool, session):
                 format=[],
                 label=output.get("label"),
             )
-            formats = output.get("format").split(
-                ",") if output.get("format") else []
+            formats = output.get("format").split(",") if output.get("format") else []
             for fmt in formats:
                 db_output.format.append(fmt.strip())
 
@@ -194,21 +196,19 @@ def add_tool_to_db(tool, session):
         session.commit()
         session.flush()
     except IntegrityError as e:
-        print(f"IntegrityError for tool {tool.id}: {e}")
+        logger.error(f"IntegrityError for tool {tool.id}: {e}")
         session.rollback()
 
 
 def process_pending_repositories():
     """Process repositories with pending status."""
     with Session(engine) as session:
-        pending_repos = session.query(
-            ArtifactHarvest).filter_by(status="pending").all()
+        pending_repos = session.query(ArtifactHarvest).filter_by(status="pending").all()
         for repo in pending_repos:
             try:
                 tools = galaxy_toolshed.smart_crawl_repository(repo.url)
-                print(
-                    f"Processing repository: {repo.url} with {
-                        len(tools)} tools found."
+                logger.info(
+                    f"Processing repository: {repo.url} with {len(tools)} tools found."
                 )
                 for tool in tools:
                     add_tool_to_db(tool, session)
@@ -218,21 +218,20 @@ def process_pending_repositories():
                 session.flush()
             except HTTPError as e:
                 if e.response.status_code == 403:
-                    print(f"Access forbidden (403) to repository: {repo.url}")
+                    logger.error(f"Access forbidden (403) to repository: {repo.url}")
                     session.commit()
                     session.flush()
                     raise e
                 else:
-                    print(
-                        f"HTTPError {e.response.status_code} for repository {
-                            repo.url}"
+                    logger.error(
+                        f"HTTPError {e.response.status_code} for repository {repo.url}"
                     )
                     repo.status = "error"
                     repo.eror_code = str(e.response.status_code)
                     session.commit()
                     session.flush()
             except Exception as e:
-                print(f"Error processing repository {repo.url}: {e}")
+                logger.error(f"Error processing repository {repo.url}: {e}")
                 repo.status = "error"
                 session.commit()
                 session.flush()
@@ -257,9 +256,6 @@ def get_tools_not_in_db():
     repos = galaxy_toolshed.load_repositories()
     tools_in_db = get_tools_from_db()
     tool_names_in_db = [t[1].lower() for t in tools_in_db]
-    # for t in tool_names_in_db:
-    #     print(t)
-    # return
     tools_in_repos = [t["name"].lower() for t in repos]
     tool_index = {}
     for r in repos:
@@ -280,152 +276,148 @@ def get_tools_not_in_db():
             if "github.com" not in url:
                 continue
             cnt += 1
-            print(f"{t['name']}, {t['remote_repository_url']}")
+            logger.debug(f"{t['name']}, {t['remote_repository_url']}")
 
-    print(f"Total tools not in DB: {cnt}")
-
-
-def compare_converters():
-    """Compare tools in the database with those in the Galaxy Tool Shed."""
-    repos = galaxy_toolshed.load_repositories()
-    error_repos = get_error_repositories()
-    results = []
-    for repo in repos:
-        url = repo["remote_repository_url"]
-        if not url:
-            continue
-        r1 = galaxy_toolshed.convert_git_url_to_api(
-            repo["remote_repository_url"])
-        if r1 not in error_repos:
-            continue
-        r2 = galaxy_toolshed.convert_git_url_to_api2(
-            repo["remote_repository_url"])
-        if r1 != r2:
-            results.append((repo["name"], r1, r2))
-
-    return results
+    logger.debug(f"Total tools not in DB: {cnt}")
 
 
-def get_tools_with_incorrect_version():
-    with Session(engine) as session:
-        stmt = select(Tool).where(Tool.version.contains("VERSION"))
-        tools = session.execute(stmt).scalars().all()
-        return tools
+# def compare_converters():
+#     """Compare tools in the database with those in the Galaxy Tool Shed."""
+#     repos = galaxy_toolshed.load_repositories()
+#     error_repos = get_error_repositories()
+#     results = []
+#     for repo in repos:
+#         url = repo["remote_repository_url"]
+#         if not url:
+#             continue
+#         r1 = galaxy_toolshed.convert_git_url_to_api(repo["remote_repository_url"])
+#         if r1 not in error_repos:
+#             continue
+#         r2 = galaxy_toolshed.convert_git_url_to_api2(repo["remote_repository_url"])
+#         if r1 != r2:
+#             results.append((repo["name"], r1, r2))
+#
+#     return results
+#
+
+# def get_tools_with_incorrect_version():
+#     with Session(engine) as session:
+#         stmt = select(ShedTool).where(ShedTool.version.contains("VERSION"))
+#         tools = session.execute(stmt).scalars().all()
+#         return tools
 
 
-def galaxy_process_errors_flow():
-    fixed_url = compare_converters()
-    for name, old_url, new_url in fixed_url:
-        with Session(engine) as session:
-            repo = session.query(Repository).filter_by(url=old_url).first()
-            if repo:
-                print(f"Updating repository URL from {old_url} to {new_url}")
-                repo.url = new_url
-                repo.status = "pending"
-                repo.eror_code = None
-
-                session.commit()
-                session.flush()
-
-    try:
-        process_pending_repositories()
-        print("Pending repositories processed successfully.")
-    except Exception as e:
-        print(f"Error processing pending repositories: {e}")
-
-
-def galaxy_fix_version_flow():
-    with Session(engine) as session:
-        stmt = select(Tool).where(Tool.version.contains("VERSION"))
-        tools = session.execute(stmt).scalars().all()
-        for tool in tools:
-            try:
-                repo_url = tool.source_url
-                tools_fetched = galaxy_toolshed.crawl_repository(repo_url)
-                for t in tools_fetched:
-                    if t.id == tool.name:
-                        tool.version = t.version
-                        session.commit()
-                        session.flush()
-                        print(f"Updated tool {
-                              tool.name} to version {tool.version}")
-                        break
-            except Exception as e:
-                print(f"Error fixing tool {tool.id}: {e}")
-
-
-def galaxy_main_process_flow():
-    create_tables()
-    print("All tables created successfully.")
-    populate_repositories()
-    print("Repository table populated successfully.")
-
-    try:
-        process_pending_repositories()
-        print("Pending repositories processed successfully.")
-    except Exception as e:
-        print(f"Error processing pending repositories: {e}")
-
-
-def galaxy_single_repo_crawl_flow(repo_url):
-    create_tables()
-    print("All tables created successfully.")
-    with Session(engine) as session:
-        process_single_repository(repo_url, session)
-        print("Single repository processed successfully.")
-
-
-def galaxy_test_flow():
-    test_url = "https://api.github.com/repos/WhoisDonlee/tools-iuc/contents"
-    # test_url=" https://api.github.com/repos/WhoisDonlee/tools-iuc/contents/tools/checkm?ref=main"
-    tools = galaxy_toolshed.smart_crawl_repository(test_url)
-    # tools = galaxy_toolshed.crawl_repository(test_url)
-    for tool in tools:
-        print(f"Found tool: {tool.id}, version: {tool.version}")
-
-
-def galaxy_update_description_flow():
-    with Session(engine) as session:
-        tools = session.query(Tool).all()
-        for tool in tools:
-            if tool.description or tool.owner:
-                continue
-            try:
-                repo_url = tool.source_url
-                data = galaxy_toolshed.get_shed_yml(repo_url)
-                description = data.get("long_description", "")
-                short_description = data.get("description", "")
-                if not description:
-                    description = short_description
-                owner = data.get("owner", "")
-                categories = data.get("categories", [])
-                categories = [c.strip().lower()
-                              for c in categories if c.strip()]
-                tool.description = description
-                tool.owner = owner
-                tool.categories = categories
-                session.commit()
-                session.flush()
-                print(
-                    f"Updating tool {tool.name} owner: {owner}, categories: {
-                        categories
-                    }"
-                )
-            except Exception as e:
-                print(
-                    f"Error updating description for tool {tool.id}, {tool.name}, {
-                        tool.source_url
-                    }: {e}"
-                )
-                continue
-
-
-if __name__ == "__main__":
-    # galaxy_update_description_flow()
-    # print("Tool descriptions updated successfully.")
-    repo_url = "https://api.github.com/repos/WhoisDonlee/tools-iuc/contents"
-    galaxy_single_repo_crawl_flow(repo_url)
-    # galaxy_test_flow()
-    # galaxy_main_process_flow()
-    # galaxy_fix_version_flow()
-    # galaxy_process_errors_flow()
+# def galaxy_process_errors_flow():
+#     fixed_url = compare_converters()
+#     for name, old_url, new_url in fixed_url:
+#         with Session(engine) as session:
+#             repo = session.query(GalaxyWorkflowArtifact).filter_by(url=old_url).first()
+#             if repo:
+#                 logger.debug(f"Updating repository URL from {old_url} to {new_url}")
+#                 repo.url = new_url
+#                 repo.status = "pending"
+#                 repo.eror_code = None
+#
+#                 session.commit()
+#                 session.flush()
+#
+#     try:
+#         process_pending_repositories()
+#         logger.info("Pending repositories processed successfully.")
+#     except Exception as e:
+#         logger.error(f"Error processing pending repositories: {e}")
+#
+#
+# def galaxy_fix_version_flow():
+#     with Session(engine) as session:
+#         stmt = select(Tool).where(Tool.version.contains("VERSION"))
+#         tools = session.execute(stmt).scalars().all()
+#         for tool in tools:
+#             try:
+#                 repo_url = tool.source_url
+#                 tools_fetched = galaxy_toolshed.crawl_repository(repo_url)
+#                 for t in tools_fetched:
+#                     if t.id == tool.name:
+#                         tool.version = t.version
+#                         session.commit()
+#                         session.flush()
+#                         print(f"Updated tool {tool.name} to version {tool.version}")
+#                         break
+#             except Exception as e:
+#                 print(f"Error fixing tool {tool.id}: {e}")
+#
+#
+# def galaxy_main_process_flow():
+#     create_tables()
+#     print("All tables created successfully.")
+#     populate_repositories()
+#     print("Repository table populated successfully.")
+#
+#     try:
+#         process_pending_repositories()
+#         print("Pending repositories processed successfully.")
+#     except Exception as e:
+#         print(f"Error processing pending repositories: {e}")
+#
+#
+# def galaxy_single_repo_crawl_flow(repo_url):
+#     create_tables()
+#     print("All tables created successfully.")
+#     with Session(engine) as session:
+#         process_single_repository(repo_url, session)
+#         print("Single repository processed successfully.")
+#
+#
+# def galaxy_test_flow():
+#     test_url = "https://api.github.com/repos/WhoisDonlee/tools-iuc/contents"
+#     # test_url=" https://api.github.com/repos/WhoisDonlee/tools-iuc/contents/tools/checkm?ref=main"
+#     tools = galaxy_toolshed.smart_crawl_repository(test_url)
+#     # tools = galaxy_toolshed.crawl_repository(test_url)
+#     for tool in tools:
+#         print(f"Found tool: {tool.id}, version: {tool.version}")
+#
+#
+# def galaxy_update_description_flow():
+#     with Session(engine) as session:
+#         tools = session.query(Tool).all()
+#         for tool in tools:
+#             if tool.description or tool.owner:
+#                 continue
+#             try:
+#                 repo_url = tool.source_url
+#                 data = galaxy_toolshed.get_shed_yml(repo_url)
+#                 description = data.get("long_description", "")
+#                 short_description = data.get("description", "")
+#                 if not description:
+#                     description = short_description
+#                 owner = data.get("owner", "")
+#                 categories = data.get("categories", [])
+#                 categories = [c.strip().lower() for c in categories if c.strip()]
+#                 tool.description = description
+#                 tool.owner = owner
+#                 tool.categories = categories
+#                 session.commit()
+#                 session.flush()
+#                 print(
+#                     f"Updating tool {tool.name} owner: {owner}, categories: {
+#                         categories
+#                     }"
+#                 )
+#             except Exception as e:
+#                 print(
+#                     f"Error updating description for tool {tool.id}, {tool.name}, {
+#                         tool.source_url
+#                     }: {e}"
+#                 )
+#                 continue
+#
+#
+# if __name__ == "__main__":
+#     # galaxy_update_description_flow()
+#     # print("Tool descriptions updated successfully.")
+#     repo_url = "https://api.github.com/repos/WhoisDonlee/tools-iuc/contents"
+#     galaxy_single_repo_crawl_flow(repo_url)
+#     # galaxy_test_flow()
+#     # galaxy_main_process_flow()
+#     # galaxy_fix_version_flow()
+#     # galaxy_process_errors_flow()

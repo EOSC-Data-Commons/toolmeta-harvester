@@ -10,7 +10,7 @@
 - [x] Interface to Galaxy ToolShed API
 - [x] Interface to WorkflowHub API
 - [x] Parsing Galaxy workflows and enrich with ToolShed data
-- [ ] Data models for Galaxy tools and workflows
+- [x] Data models for Galaxy tools and workflows
 - [ ] Generalized data model for artifacts and contracts
 - [ ] Initial data harvesting and storage from WorkflowHub
 - [ ] Deployment to Warehouse

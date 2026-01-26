@@ -18,7 +18,7 @@ HEADERS = {
 }
 
 # Initialize requests cache 
-requests_cache.install_cache('workflowhub_org_cache', 
+requests_cache.install_cache('cache/workflowhub_org_cache', 
                              backend='sqlite',
                              expire_after=86400)
 

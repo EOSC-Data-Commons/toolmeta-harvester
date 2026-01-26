@@ -11,6 +11,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.dialects.postgresql import ARRAY
 import string
@@ -45,9 +46,9 @@ class ArtifactHarvest(Base):
     # galaxy_workflow, galaxy_tool, cwl_tool, nextflow_pipeline, ...
     artifact_type = Column(Text, nullable=False)
     # id of the stored artifact in the corresponding table
-    stored_id = Column(Text, nullable=False)
+    stored_id = Column(Text)
     # name of the corresponding table where the artifact is stored
-    stored_table = Column(Text, nullable=False)
+    stored_table = Column(Text)
     created_at = Column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -61,8 +62,8 @@ class ArtifactHarvest(Base):
     )
 
 
-class GalaxyWorkflow(Base):
-    __tablename__ = "galaxy_workflows"
+class GalaxyWorkflowArtifact(Base):
+    __tablename__ = "galaxy_workflow_artifacts"
 
     id = Column(
         String, primary_key=True, unique=True, nullable=False
@@ -75,7 +76,7 @@ class GalaxyWorkflow(Base):
     output_toolshed_tools = Column(ARRAY(Text))
     toolshed_tools = Column(ARRAY(Text))
     tags = Column(ARRAY(Text))
-    raw_ga = Column(LargeBinary, nullable=False)  # raw JSON
+    raw_ga = Column(JSONB, nullable=False)  # raw JSON
     created_at = Column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -121,7 +122,8 @@ class GalaxyWorkflow(Base):
 class ShedTool(Base):
     __tablename__ = "shed_tools"
 
-    id = Column(String, primary_key=True, unique=True, nullable=False)
+    uri = Column(String, primary_key=True, unique=True, nullable=False)
+    id = Column(Text, nullable=False)
     name = Column(Text, nullable=False)
     version = Column(Text)
 
@@ -162,14 +164,14 @@ class ShedTool(Base):
     )
 
 
-class ToolInput(Base):
+class ShedToolInput(Base):
     __tablename__ = "shed_tool_inputs"
 
     id = Column(
         Integer, Identity(start=1), autoincrement=True, primary_key=True
     )  # logical output id
 
-    tool_id = Column(String, ForeignKey("shed_tools.id", ondelete="CASCADE"))
+    tool_uri = Column(String, ForeignKey("shed_tools.uri", ondelete="CASCADE"))
     name = Column(Text, nullable=True)
     type = Column(Text, nullable=True)
     # format = Column(Text, nullable=True)
@@ -199,7 +201,7 @@ class ShedToolOutput(Base):
         Integer, Identity(start=1), autoincrement=True, primary_key=True
     )  # logical output id
 
-    tool_id = Column(String, ForeignKey("shed_tools.id", ondelete="CASCADE"))
+    tool_uri = Column(String, ForeignKey("shed_tools.uri", ondelete="CASCADE"))
     name = Column(Text, nullable=True)
     type = Column(Text, nullable=True)
     # format = Column(Text, nullable=False)

@@ -33,9 +33,11 @@ requests_cache.install_cache(
 )
 
 
-@dataclass(frozen=True)
+# @dataclass(frozen=True)
+@dataclass
 class ToolInfo:
     id: str
+    uri: str
     tool_name: str
     owner: str
     version: str
@@ -44,7 +46,7 @@ class ToolInfo:
     inputs: list
     outputs: list
     repo_url: str
-    tool_type: str = "galaxy_tool"
+    tool_type: str = "galaxy_shed_tool"
 
 
 def get_json(url):
@@ -100,6 +102,10 @@ def substitute_tokens(xml_str, tokens):
     return xml_str
 
 
+def generate_tool_uri(name, owner, repo, version):
+    return f"toolshed.g2.bx.psu.edu/{owner}/{repo}/{name}/{version}"
+
+
 def parse_xml(tool_xml, dir_contents=None, repo_url=""):
     try:
         tree = etree.fromstring(tool_xml.encode())
@@ -124,13 +130,15 @@ def parse_xml(tool_xml, dir_contents=None, repo_url=""):
         except XMLSyntaxError as e:
             # Some macro.xml files use relative paths
             if macro_xml.startswith("../"):
-                logger.debug(f"Retrying macro file with relative path: {macro_file}")
+                logger.debug(
+                    f"Retrying macro file with relative path: {macro_file}")
                 macro_url = urljoin(macro_url, macro_xml)
                 macro_xml = fetch_xml(macro_url)
                 macro_tree = etree.fromstring(macro_xml.encode())
             else:
                 logger.error(
-                    f"Error parsing macro file {macro_file} from {macro_url}: {e}"
+                    f"Error parsing macro file {
+                        macro_file} from {macro_url}: {e}"
                 )
                 continue
         tokens.update(extract_tokens(macro_tree))
@@ -147,7 +155,8 @@ def parse_xml(tool_xml, dir_contents=None, repo_url=""):
         try:
             etree.fromstring(new_xml.encode())
         except XMLSyntaxError:
-            logger.debug("Substituted XML is invalid, stopping token substitution.")
+            logger.debug(
+                "Substituted XML is invalid, stopping token substitution.")
             new_xml = tmp_xml
             break
 
@@ -198,6 +207,8 @@ def parse_xml(tool_xml, dir_contents=None, repo_url=""):
 
     return ToolInfo(
         id=tool_id,
+        # Polulate the uri later
+        uri=None,
         tool_name=tool_name,
         version=version,
         description=description,
@@ -209,12 +220,42 @@ def parse_xml(tool_xml, dir_contents=None, repo_url=""):
     )
 
 
-def fetch_toolshed_tool(tool_id: str) -> dict:
+def get_shed_tool_name(tool_uri: str) -> str:
+    """
+    Extract ToolShed tool name from Galaxy tool_id.
+    Example tool_id: toolshed.g2.bx.psu.edu/repos/devteam/bwa_mem/bwa_mem/
+    """
+    parts = tool_uri.split("/")
+    if not tool_uri.startswith("toolshed."):
+        raise ValueError(f"Not a ToolShed tool_id: {tool_uri}")
+    tool_name = parts[4]
+    return tool_name
+
+
+def fetch_toolshed_tool(tool_uri: str) -> ToolInfo:
+    tool_name = get_shed_tool_name(tool_uri)
+    tool_meta = fetch_toolshed_tool_meta(tool_uri)[0]
+    repo_api_url = convert_git_url_to_api(tool_meta["remote_repository_url"])
+    if not repo_api_url:
+        raise ValueError(
+            f"Could not convert git URL to API URL: {
+                tool_meta['remote_repository_url']
+            }"
+        )
+    for url, tools in smart_crawl_repository_iter(repo_api_url):
+        for tool in tools:
+            if tool.id == tool_name:
+                tool.uri = tool_uri
+                return tool
+    return None
+
+
+def fetch_toolshed_tool_meta(tool_uri: str) -> dict:
     """
     Fetch ToolShed tool metadata (including wrapper XML) given a Galaxy tool_id.
     """
-    parts = tool_id.split("/")
-    if not tool_id.startswith("toolshed."):
+    parts = tool_uri.split("/")
+    if not tool_uri.startswith("toolshed."):
         raise ValueError("Not a ToolShed tool_id")
 
     # host = parts[0].replace("toolshed.", "")
@@ -349,8 +390,10 @@ def get_git_tree(repo_api_url):
     r.raise_for_status()
 
     branch = r.json()["default_branch"]
-    tree_url = f"https://api.github.com/repos/{owner}/{repo}/git/trees/{branch}"
-    r = requests.get(tree_url, params={"recursive": "1"}, timeout=30, headers=HEADERS)
+    tree_url = f"https://api.github.com/repos/{
+        owner}/{repo}/git/trees/{branch}"
+    r = requests.get(tree_url, params={
+                     "recursive": "1"}, timeout=30, headers=HEADERS)
     r.raise_for_status()
     return (branch, r.json())
 
@@ -389,7 +432,7 @@ def get_tool_folders(repo_api_url):
         ):
             folder = "/".join(item["path"].split("/")[:-1])
             if folder.startswith(base_path):
-                folder = folder[len(base_path) :]
+                folder = folder[len(base_path):]
             folder = f"{strip_query(repo_api_url)}/{folder}?ref={branch}"
             logger.debug("Found tool url folder:", folder)
             tool_folders.add(folder)
@@ -400,7 +443,9 @@ def get_tool_folders(repo_api_url):
 def smart_crawl_repository(repo_api_url):
     tool_folders = get_tool_folders(repo_api_url)
     logger.debug(
-        f"Smart crawling repository: {repo_api_url} with {len(tool_folders)} tool folders"
+        f"Smart crawling repository: {repo_api_url} with {
+            len(tool_folders)
+        } tool folders"
     )
     collector = []
     for url in tool_folders:
@@ -414,7 +459,9 @@ def smart_crawl_repository(repo_api_url):
 def smart_crawl_repository_iter(repo_api_url):
     tool_folders = get_tool_folders(repo_api_url)
     logger.debug(
-        f"Smart crawling repository: {repo_api_url} with {len(tool_folders)} tool folders"
+        f"Smart crawling repository: {repo_api_url} with {
+            len(tool_folders)
+        } tool folders"
     )
     for url in tool_folders:
         tools = crawl_repository(url)

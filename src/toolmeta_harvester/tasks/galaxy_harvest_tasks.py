@@ -10,7 +10,6 @@ from toolmeta_harvester.db.models import (
 )
 from toolmeta_harvester.adaptors import galaxy_toolshed
 from requests.exceptions import HTTPError
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
@@ -41,7 +40,8 @@ def populate_harvests_table_with_shed_tools():
 def get_tools_from_db():
     """Retrieve all tools from the database."""
     with Session(engine) as session:
-        tools = session.query(ShedTool.id, ShedTool.name, ShedTool.version).all()
+        tools = session.query(ShedTool.id, ShedTool.name,
+                              ShedTool.version).all()
         return tools
 
 
@@ -80,7 +80,8 @@ def process_single_repository(repo_url, session):
             repo = results[0]
             if repo.status == "completed":
                 logger.debug(
-                    f"Repository {url} already exists in the database. Skipping."
+                    f"Repository {
+                        url} already exists in the database. Skipping."
                 )
                 continue
         else:
@@ -116,11 +117,13 @@ def add_workflow_to_db(wf, session):
         session = Session(engine)
     try:
         db_wf = GalaxyWorkflowArtifact(
-            id=wf.uuid,
+            uuid=wf.uuid,
             name=wf.name,
             version=wf.version,
             description=wf.description,
             url=wf.url,
+            input_formats=wf.input_formats,
+            output_formats=wf.output_formats,
             input_toolshed_tools=[t.uri for t in wf.input_tools],
             output_toolshed_tools=[t.uri for t in wf.output_tools],
             toolshed_tools=wf.toolshed_tools,
@@ -130,7 +133,8 @@ def add_workflow_to_db(wf, session):
         session.add(db_wf)
         session.flush()  # Ensure db_tool.id is populated
         logger.info(
-            f"Adding workflow: {db_wf.id}, {db_wf.name}, version: {db_wf.version}"
+            f"Adding workflow: {db_wf.id}, {
+                db_wf.name}, version: {db_wf.version}"
         )
 
         session.commit()
@@ -159,7 +163,8 @@ def add_tool_to_db(tool, session):
         # session.commit()
         session.flush()  # Ensure db_tool.id is populated
         logger.info(
-            f"Adding tool: {db_tool.id}, {db_tool.name}, version: {db_tool.version}"
+            f"Adding tool: {db_tool.id}, {
+                db_tool.name}, version: {db_tool.version}"
         )
 
         for input in tool.inputs:
@@ -171,7 +176,8 @@ def add_tool_to_db(tool, session):
                 format=[],
                 label=input.get("label"),
             )
-            formats = input.get("format").split(",") if input.get("format") else []
+            formats = input.get("format").split(
+                ",") if input.get("format") else []
             for fmt in formats:
                 db_input.format.append(fmt.strip())
 
@@ -187,7 +193,8 @@ def add_tool_to_db(tool, session):
                 format=[],
                 label=output.get("label"),
             )
-            formats = output.get("format").split(",") if output.get("format") else []
+            formats = output.get("format").split(
+                ",") if output.get("format") else []
             for fmt in formats:
                 db_output.format.append(fmt.strip())
 
@@ -203,12 +210,14 @@ def add_tool_to_db(tool, session):
 def process_pending_repositories():
     """Process repositories with pending status."""
     with Session(engine) as session:
-        pending_repos = session.query(ArtifactHarvest).filter_by(status="pending").all()
+        pending_repos = session.query(
+            ArtifactHarvest).filter_by(status="pending").all()
         for repo in pending_repos:
             try:
                 tools = galaxy_toolshed.smart_crawl_repository(repo.url)
                 logger.info(
-                    f"Processing repository: {repo.url} with {len(tools)} tools found."
+                    f"Processing repository: {repo.url} with {
+                        len(tools)} tools found."
                 )
                 for tool in tools:
                     add_tool_to_db(tool, session)
@@ -218,13 +227,15 @@ def process_pending_repositories():
                 session.flush()
             except HTTPError as e:
                 if e.response.status_code == 403:
-                    logger.error(f"Access forbidden (403) to repository: {repo.url}")
+                    logger.error(
+                        f"Access forbidden (403) to repository: {repo.url}")
                     session.commit()
                     session.flush()
                     raise e
                 else:
                     logger.error(
-                        f"HTTPError {e.response.status_code} for repository {repo.url}"
+                        f"HTTPError {e.response.status_code} for repository {
+                            repo.url}"
                     )
                     repo.status = "error"
                     repo.eror_code = str(e.response.status_code)

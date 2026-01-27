@@ -2,7 +2,7 @@
 run:run-local
 
 run-local: postgres
-	uv run src/toolmeta_harvester/main.py
+	uv run src/main.py
 
 .PHONY: postgres
 postgres:

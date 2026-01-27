@@ -13,6 +13,8 @@ class WorkflowInfo:
     tags: list = []
     inputs: list = []
     outputs: list = []
+    input_formats: list = []
+    output_formats: list = []
     input_tools: list = []
     output_tools: list = []
     steps: list = []
@@ -113,6 +115,7 @@ def get_inputs(ga):
     for step_id, step in steps.items():
         step_type = step.get("type")
         if step_type in {"data_input", "data_collection_input", "parameter_input"}:
+            # logger.info(step)
             inputs.append(
                 {
                     "step_id": step_id,
@@ -164,14 +167,30 @@ def parse_workflow(ga) -> WorkflowInfo:
 
     input_tools = get_shed_inputs(ga)
     wf_info.input_tools = input_tools
+    input_formats = set()
     for tool in input_tools:
         for input in tool.inputs:
             wf_info.inputs.append(input)
+        formats = shed.extract_formats_from_tool(tool)
+        input_formats.update(formats)
+    wf_info.input_formats = list(input_formats)
+
+    # # The inputs in the DAG are usually stubs that link to nodes with actual tools
+    # input_steps = get_inputs(ga)
+    # for step in input_steps:
+    #     data_type = step.get("data_type")
+    #     if data_type:
+    #         input_formats.add(data_type.lower())
+    # wf_info.input_formats = list(input_formats)
 
     output_tools = get_shed_outputs(ga)
     wf_info.output_tools = output_tools
+    output_formats = set()
     for tool in output_tools:
         for output in tool.outputs:
             wf_info.outputs.append(output)
+        formats = shed.extract_formats_from_tool(tool)
+        output_formats.update(formats)
+    wf_info.output_formats = list(output_formats)
 
     return wf_info

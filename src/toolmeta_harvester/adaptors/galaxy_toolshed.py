@@ -106,6 +106,15 @@ def generate_tool_uri(name, owner, repo, version):
     return f"toolshed.g2.bx.psu.edu/{owner}/{repo}/{name}/{version}"
 
 
+def extract_formats_from_tool(tool):
+    result = set()
+    for input in tool.inputs:
+        formats = input.get("format").split(",") if input.get("format") else []
+        for fmt in formats:
+            result.add(fmt.strip())
+    return list(result)
+
+
 def parse_xml(tool_xml, dir_contents=None, repo_url=""):
     try:
         tree = etree.fromstring(tool_xml.encode())

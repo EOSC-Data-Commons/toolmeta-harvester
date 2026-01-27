@@ -66,12 +66,15 @@ class GalaxyWorkflowArtifact(Base):
     __tablename__ = "galaxy_workflow_artifacts"
 
     id = Column(
-        String, primary_key=True, unique=True, nullable=False
-    )  # logical workflow id
+        Integer, Identity(start=1), autoincrement=True, primary_key=True
+    )  # logical repository id
+    uuid = Column(Text, nullable=False, unique=True, index=True)
     name = Column(Text, nullable=False)
     description = Column(Text)
     url = Column(Text, nullable=False, index=True)
     version = Column(Text)
+    input_formats = Column(ARRAY(Text))
+    output_formats = Column(ARRAY(Text))
     input_toolshed_tools = Column(ARRAY(Text))
     output_toolshed_tools = Column(ARRAY(Text))
     toolshed_tools = Column(ARRAY(Text))

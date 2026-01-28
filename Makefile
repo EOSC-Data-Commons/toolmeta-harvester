@@ -1,7 +1,7 @@
 .PHONY: run-local run
 run:run-local
 
-run-local: postgres
+run-local: 
 	uv run src/main.py
 
 .PHONY: postgres

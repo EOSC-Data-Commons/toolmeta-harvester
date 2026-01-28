@@ -1,6 +1,7 @@
 from dataclasses import dataclass
-from pathlib import Path
-import tomllib
+from dynaconf import Dynaconf
+
+settings = Dynaconf(settings_files=["config/config.toml", "config/.secrets.toml"])
 
 
 @dataclass(frozen=True)
@@ -23,38 +24,20 @@ class GalaxyConfig:
     host_url: str
 
 
-def load_galaxy_config(path: Path | None = None) -> GitConfig:
-    # path = path or Path(__file__).parent / "config/config.toml"
-    path = path or Path(__file__).parent.parent.parent / "config/config.toml"
-
-    with path.open("rb") as f:
-        data = tomllib.load(f)
-
-    galaxy = data["galaxy_local"]
+def load_galaxy_config() -> GitConfig:
+    galaxy = settings.galaxy_local
     return GalaxyConfig(api_key=galaxy["api_key"], host_url=galaxy["host_url"])
 
 
-def load_git_config(path: Path | None = None) -> GitConfig:
-    # path = path or Path(__file__).parent / "config/config.toml"
-    path = path or Path(__file__).parent.parent.parent / "config/config.toml"
-
-    with path.open("rb") as f:
-        data = tomllib.load(f)
-
-    git = data["github"]
+def load_git_config() -> GitConfig:
+    git = settings.github
     return GitConfig(
         api_key=git["api_key"],
     )
 
 
-def load_db_config(path: Path | None = None) -> DatabaseConfig:
-    # path = path or Path(__file__).parent / "config/config.toml"
-    path = path or Path(__file__).parent.parent.parent / "config/config.toml"
-
-    with path.open("rb") as f:
-        data = tomllib.load(f)
-
-    db = data["database"]
+def load_db_config() -> DatabaseConfig:
+    db = settings.database
     return DatabaseConfig(
         host=db["host"],
         port=db["port"],

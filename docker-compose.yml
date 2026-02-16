@@ -1,14 +1,12 @@
-version: "3.9"
-
 services:
   postgres:
     image: postgres:16
     container_name: tool_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: admin
-      POSTGRES_USER: harvester
-      POSTGRES_PASSWORD: yoursecretsecret
+      POSTGRES_DB: ${TOOL_REGISTRY_DATABASE__NAME:-toolsdb}
+      POSTGRES_USER: ${TOOL_REGISTRY_DATABASE__USER:-toolsuser}
+      POSTGRES_PASSWORD: ${TOOL_REGISTRY_DATABASE__PASSWORD:-toolspassword}
     ports:
       - "5432:5432"
     volumes:

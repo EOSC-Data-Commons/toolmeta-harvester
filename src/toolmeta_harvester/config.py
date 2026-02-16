@@ -1,7 +1,19 @@
 from dataclasses import dataclass
 from dynaconf import Dynaconf
+import json
 
-settings = Dynaconf(settings_files=["config/config.toml", "config/.secrets.toml"])
+settings = Dynaconf(
+    envvar_prefix="TOOL_REGISTRY",
+    settings_files=["config/config.toml", "config/.secrets.toml"],
+)
+
+# Environment variable overrides:
+# export TOOL_REGISTRY_DATABASE__HOST=localhost
+# export TOOL_REGISTRY_DATABASE__PORT=5432
+# export TOOL_REGISTRY_DATABASE__NAME=admin
+# export TOOL_REGISTRY_DATABASE__USER=harvester
+# export TOOL_REGISTRY_DATABASE__PASSWORD=yoursecretsecret
+# export TOOL_REGISTRY_GITHUB__API_KEY=your_github_api_key
 
 
 @dataclass(frozen=True)
@@ -37,6 +49,8 @@ def load_git_config() -> GitConfig:
 
 
 def load_db_config() -> DatabaseConfig:
+    print("Loading database configuration:")
+    print(json.dumps(settings.as_dict(), indent=2))
     db = settings.database
     return DatabaseConfig(
         host=db["host"],

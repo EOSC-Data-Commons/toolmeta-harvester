@@ -129,7 +129,7 @@ def parse_xml(tool_xml, dir_contents=None, repo_url=""):
     new_xml = tool_xml
     tokens = {}
     for macro_file in macro_files:
-        logger.debug("Processing macro file:", macro_file)
+        logger.debug(f"Processing macro file: {macro_file}")
         macro_url = get_file_url(dir_contents or [], macro_file)
         if not macro_url:
             continue

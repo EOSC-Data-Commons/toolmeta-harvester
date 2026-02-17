@@ -14,6 +14,15 @@ run:run-local
 run-local: 
 	uv run src/main.py
 
+.PHONY: install
+install: clean sync
+
+.PHONY: clean
+clean:
+	uv clean
+	rm uv.lock
+	rm -rf .venv/lib/python3.12/site-packages/toolmeta_models/
+
 .PHONY: sync
 sync:
 	uv sync
@@ -21,6 +30,7 @@ sync:
 
 .PHONY: postgres-up postgres-down postgres-logs postgres-reset
 postgres-up:
+	# Use pgvector image which is postgres with pgvector extension pre-installed, which is required for vector search capabilities in the tool registry.
 	@echo "Starting Postgres container '$(POSTGRES_CONTAINER)' on port $(TOOL_REGISTRY_DATABASE__PORT)..."
 	docker run -d --rm --name $(POSTGRES_CONTAINER) \
 	  	-p $(TOOL_REGISTRY_DATABASE__PORT):5432 \
@@ -28,7 +38,8 @@ postgres-up:
 	  	-e POSTGRES_USER=$(TOOL_REGISTRY_DATABASE__USER) \
 	  	-e POSTGRES_PASSWORD=$(TOOL_REGISTRY_DATABASE__PASSWORD) \
 	  	-v $(POSTGRES_VOLUME):/var/lib/postgresql/data \
-	  	postgres:16
+	  	pgvector/pgvector:0.8.1-pg16-trixie
+	  	# postgres:16
 
 postgres-down:
 	@echo "Stopping and removing Postgres container '$(POSTGRES_CONTAINER)'..."

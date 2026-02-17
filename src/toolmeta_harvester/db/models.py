@@ -14,6 +14,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.dialects.postgresql import ARRAY
+from toolmeta_models import Base
 import string
 import secrets
 
@@ -27,7 +28,7 @@ def generate_tool_id():
     return f"edc:tool:{generate_alphanum_id()}"
 
 
-Base = declarative_base()
+# Base = declarative_base()
 
 
 class ArtifactHarvest(Base):

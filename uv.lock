@@ -907,7 +907,7 @@ requires-dist = [
 [[package]]
 name = "toolmeta-models"
 version = "0.1.0.dev0"
-source = { git = "https://github.com/EOSC-Data-Commons/toolmeta-models.git?rev=main#8c5640a4526c0c9eccd4256dd6ec1e47752b8930" }
+source = { git = "https://github.com/EOSC-Data-Commons/toolmeta-models.git?rev=main#07069fcc350a46ab7b624916ed44903be5581b80" }
 dependencies = [
     { name = "pgvector" },
     { name = "pydantic" },

@@ -1,19 +1,20 @@
 from sqlalchemy import (
     Column,
-    Text,
+    # Text,
     Integer,
-    Boolean,
-    ForeignKey,
+    # Boolean,
+    # ForeignKey,
     DateTime,
-    LargeBinary,
+    # LargeBinary,
     Identity,
     String,
-    UniqueConstraint,
+    # UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import declarative_base, relationship
-from sqlalchemy.dialects.postgresql import ARRAY
+
+# from sqlalchemy.dialects.postgresql import JSONB
+# from sqlalchemy.orm import declarative_base, relationship
+# from sqlalchemy.dialects.postgresql import ARRAY
 from toolmeta_models import Base
 import string
 import secrets
@@ -28,28 +29,25 @@ def generate_tool_id():
     return f"edc:tool:{generate_alphanum_id()}"
 
 
-# Base = declarative_base()
-
-
-class ArtifactHarvest(Base):
-    __tablename__ = "artifact_harvests"
+class ToolHarvest(Base):
+    __tablename__ = "_tool_harvest"
 
     id = Column(
         Integer, Identity(start=1), autoincrement=True, primary_key=True
     )  # logical repository id
-    url = Column(Text, nullable=False, index=True)
+    url = Column(String, nullable=False, index=True)
     # pending, error, processing, completed
-    status = Column(Text, nullable=False)
+    status = Column(String, nullable=False)
     # HTTP error code if applicable
-    eror_code = Column(Text)
+    eror_code = Column(String)
     # usegalaxy.org, workflowhub.eu, ...
-    source_type = Column(Text, nullable=False)
+    source_type = Column(String, nullable=False)
     # galaxy_workflow, galaxy_tool, cwl_tool, nextflow_pipeline, ...
-    artifact_type = Column(Text, nullable=False)
+    artifact_type = Column(String, nullable=False)
     # id of the stored artifact in the corresponding table
-    stored_id = Column(Text)
+    stored_id = Column(String)
     # name of the corresponding table where the artifact is stored
-    stored_table = Column(Text)
+    stored_table = Column(String)
     created_at = Column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -63,36 +61,36 @@ class ArtifactHarvest(Base):
     )
 
 
-class GalaxyWorkflowArtifact(Base):
-    __tablename__ = "galaxy_workflow_artifacts"
-
-    id = Column(
-        Integer, Identity(start=1), autoincrement=True, primary_key=True
-    )  # logical repository id
-    uuid = Column(Text, nullable=False, unique=True, index=True)
-    name = Column(Text, nullable=False)
-    description = Column(Text)
-    url = Column(Text, nullable=False, index=True)
-    version = Column(Text)
-    input_formats = Column(ARRAY(Text))
-    output_formats = Column(ARRAY(Text))
-    input_toolshed_tools = Column(ARRAY(Text))
-    output_toolshed_tools = Column(ARRAY(Text))
-    toolshed_tools = Column(ARRAY(Text))
-    tags = Column(ARRAY(Text))
-    raw_ga = Column(JSONB, nullable=False)  # raw JSON
-    created_at = Column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
-    )
-    updated_at = Column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        onupdate=func.now(),
-        nullable=False,
-    )
-
+# class GalaxyWorkflowArtifact(Base):
+#     __tablename__ = "galaxy_workflow_artifacts"
+#
+#     id = Column(
+#         Integer, Identity(start=1), autoincrement=True, primary_key=True
+#     )  # logical repository id
+#     uuid = Column(Text, nullable=False, unique=True, index=True)
+#     name = Column(Text, nullable=False)
+#     description = Column(Text)
+#     url = Column(Text, nullable=False, index=True)
+#     version = Column(Text)
+#     input_formats = Column(ARRAY(Text))
+#     output_formats = Column(ARRAY(Text))
+#     input_toolshed_tools = Column(ARRAY(Text))
+#     output_toolshed_tools = Column(ARRAY(Text))
+#     toolshed_tools = Column(ARRAY(Text))
+#     tags = Column(ARRAY(Text))
+#     raw_ga = Column(JSONB, nullable=False)  # raw JSON
+#     created_at = Column(
+#         DateTime(timezone=True),
+#         server_default=func.now(),
+#         nullable=False,
+#     )
+#     updated_at = Column(
+#         DateTime(timezone=True),
+#         server_default=func.now(),
+#         onupdate=func.now(),
+#         nullable=False,
+#     )
+#
 
 # class Repository(Base):
 #     __tablename__ = "repositories"
@@ -123,106 +121,106 @@ class GalaxyWorkflowArtifact(Base):
 #     )
 #
 #
-class ShedTool(Base):
-    __tablename__ = "shed_tools"
-
-    uri = Column(String, primary_key=True, unique=True, nullable=False)
-    id = Column(Text, nullable=False)
-    name = Column(Text, nullable=False)
-    version = Column(Text)
-
-    source_type = Column(Text, nullable=False)  # galaxy, cwl, nextflow, ...
-    source_url = Column(Text)
-
-    description = Column(Text)
-    categories = Column(ARRAY(Text))
-    owner = Column(Text)
-
-    created_at = Column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
-    )
-    updated_at = Column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        onupdate=func.now(),
-        nullable=False,
-    )
-
-    inputs = relationship(
-        "ShedToolInput",
-        back_populates="tool",
-        cascade="all, delete-orphan",
-    )
-
-    outputs = relationship(
-        "ShedToolOutput",
-        back_populates="tool",
-        cascade="all, delete-orphan",
-    )
-    __table_args__ = (
-        UniqueConstraint(
-            "name", "version", "source_type", name="uq_tool_name_version_source"
-        ),
-    )
-
-
-class ShedToolInput(Base):
-    __tablename__ = "shed_tool_inputs"
-
-    id = Column(
-        Integer, Identity(start=1), autoincrement=True, primary_key=True
-    )  # logical output id
-
-    tool_uri = Column(String, ForeignKey("shed_tools.uri", ondelete="CASCADE"))
-    name = Column(Text, nullable=True)
-    type = Column(Text, nullable=True)
-    # format = Column(Text, nullable=True)
-    format = Column(ARRAY(Text), nullable=True)
-    label = Column(Text, nullable=True)
-    is_optional = Column(Boolean, default=False)
-    created_at = Column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
-    )
-
-    updated_at = Column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        onupdate=func.now(),
-        nullable=False,
-    )
-
-    tool = relationship("ShedTool", back_populates="inputs")
-
-
-class ShedToolOutput(Base):
-    __tablename__ = "shed_tool_outputs"
-
-    id = Column(
-        Integer, Identity(start=1), autoincrement=True, primary_key=True
-    )  # logical output id
-
-    tool_uri = Column(String, ForeignKey("shed_tools.uri", ondelete="CASCADE"))
-    name = Column(Text, nullable=True)
-    type = Column(Text, nullable=True)
-    # format = Column(Text, nullable=False)
-    format = Column(ARRAY(Text), nullable=True)
-    label = Column(Text, nullable=True)
-
-    created_at = Column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
-    )
-
-    updated_at = Column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        onupdate=func.now(),
-        nullable=False,
-    )
-
-    tool = relationship("ShedTool", back_populates="outputs")
+# class ShedTool(Base):
+#     __tablename__ = "shed_tools"
+#
+#     uri = Column(String, primary_key=True, unique=True, nullable=False)
+#     id = Column(Text, nullable=False)
+#     name = Column(Text, nullable=False)
+#     version = Column(Text)
+#
+#     source_type = Column(Text, nullable=False)  # galaxy, cwl, nextflow, ...
+#     source_url = Column(Text)
+#
+#     description = Column(Text)
+#     categories = Column(ARRAY(Text))
+#     owner = Column(Text)
+#
+#     created_at = Column(
+#         DateTime(timezone=True),
+#         server_default=func.now(),
+#         nullable=False,
+#     )
+#     updated_at = Column(
+#         DateTime(timezone=True),
+#         server_default=func.now(),
+#         onupdate=func.now(),
+#         nullable=False,
+#     )
+#
+#     inputs = relationship(
+#         "ShedToolInput",
+#         back_populates="tool",
+#         cascade="all, delete-orphan",
+#     )
+#
+#     outputs = relationship(
+#         "ShedToolOutput",
+#         back_populates="tool",
+#         cascade="all, delete-orphan",
+#     )
+#     __table_args__ = (
+#         UniqueConstraint(
+#             "name", "version", "source_type", name="uq_tool_name_version_source"
+#         ),
+#     )
+#
+#
+# class ShedToolInput(Base):
+#     __tablename__ = "shed_tool_inputs"
+#
+#     id = Column(
+#         Integer, Identity(start=1), autoincrement=True, primary_key=True
+#     )  # logical output id
+#
+#     tool_uri = Column(String, ForeignKey("shed_tools.uri", ondelete="CASCADE"))
+#     name = Column(Text, nullable=True)
+#     type = Column(Text, nullable=True)
+#     # format = Column(Text, nullable=True)
+#     format = Column(ARRAY(Text), nullable=True)
+#     label = Column(Text, nullable=True)
+#     is_optional = Column(Boolean, default=False)
+#     created_at = Column(
+#         DateTime(timezone=True),
+#         server_default=func.now(),
+#         nullable=False,
+#     )
+#
+#     updated_at = Column(
+#         DateTime(timezone=True),
+#         server_default=func.now(),
+#         onupdate=func.now(),
+#         nullable=False,
+#     )
+#
+#     tool = relationship("ShedTool", back_populates="inputs")
+#
+#
+# class ShedToolOutput(Base):
+#     __tablename__ = "shed_tool_outputs"
+#
+#     id = Column(
+#         Integer, Identity(start=1), autoincrement=True, primary_key=True
+#     )  # logical output id
+#
+#     tool_uri = Column(String, ForeignKey("shed_tools.uri", ondelete="CASCADE"))
+#     name = Column(Text, nullable=True)
+#     type = Column(Text, nullable=True)
+#     # format = Column(Text, nullable=False)
+#     format = Column(ARRAY(Text), nullable=True)
+#     label = Column(Text, nullable=True)
+#
+#     created_at = Column(
+#         DateTime(timezone=True),
+#         server_default=func.now(),
+#         nullable=False,
+#     )
+#
+#     updated_at = Column(
+#         DateTime(timezone=True),
+#         server_default=func.now(),
+#         onupdate=func.now(),
+#         nullable=False,
+#     )
+#
+#     tool = relationship("ShedTool", back_populates="outputs")

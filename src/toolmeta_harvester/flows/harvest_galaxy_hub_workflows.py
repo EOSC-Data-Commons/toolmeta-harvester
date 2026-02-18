@@ -24,15 +24,12 @@ def pipeline_harvest_workflow_hub(no_of_workflows: int = 10):
         logger.info(f"URL: {workflow_info.url}")
         logger.info(f"Input data types: {len(workflow_info.inputs)}")
         logger.info(f"Output data types: {len(workflow_info.outputs)}")
-        logger.info(f"Toolshed tools used: {len(workflow_info.toolshed_tools)}")
+        logger.info(f"Toolshed tools used: {
+                    len(workflow_info.toolshed_tools)}")
         logger.info(workflow_info.toolshed_tools)
         logger.info("-" * 40)
 
-        # # Step 3: Store Input/Ouput toolshed tools in DB
-        # for tool in workflow_info.input_tools + workflow_info.output_tools:
-        #     ght.add_tool_to_db(tool, session)
-        #     logger.info(f"Added tool {tool.tool_name} to the database.")
-        # Step 4: Store Galaxy Workflow in DB
+        # Step 3: Store Galaxy Workflow in DB
         ght.add_workflow_to_db(workflow_info, session)
         logger.info("Added workflow and tools to the database.")
 

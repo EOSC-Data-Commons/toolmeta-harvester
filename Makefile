@@ -8,6 +8,9 @@ POSTGRES_CONTAINER=tool-registry-postgres
 POSTGRES_VOLUME=tool_registry_pgdata
 TOOLS_CONTAINER=ghcr.io/eosc-data-commons/tool-registry:latest
 
+check-secrets:
+	@test -f config/.secrets.toml || (echo "WARNING Missing config/.secrets.toml; github token might not be defined"; exit 0)
+
 .PHONY: run-local run
 run:run-local
 
@@ -17,7 +20,7 @@ run-local:
 .PHONY: re-install install
 re-install: clean sync
 
-install: postgres-up sync
+install: check-secrets postgres-up sync
 
 .PHONY: clean
 clean:

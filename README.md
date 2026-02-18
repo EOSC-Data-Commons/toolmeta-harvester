@@ -11,11 +11,12 @@
 - [x] Interface to WorkflowHub API
 - [x] Parsing Galaxy workflows and enrich with ToolShed data
 - [x] Data models for Galaxy tools and workflows
-- [ ] Generalized data model for artifacts and contracts
+- [x] Generalized data model for artifacts and contracts
 - [ ] Initial data harvesting and storage from WorkflowHub
 - [ ] Deployment to Warehouse
 - [ ] Basic documentation (README, setup, usage)
 - [ ] Basic tests and CI pipeline
+- [ ] Create initial embedding pipeline
 
 
 ```

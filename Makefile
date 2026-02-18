@@ -14,8 +14,10 @@ run:run-local
 run-local: 
 	uv run src/main.py
 
-.PHONY: install
-install: clean sync
+.PHONY: re-install install
+re-install: clean sync
+
+install: postgres-up sync
 
 .PHONY: clean
 clean:

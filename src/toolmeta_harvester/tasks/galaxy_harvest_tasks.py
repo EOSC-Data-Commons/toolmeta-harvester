@@ -1,13 +1,19 @@
 import logging
+import json
 from toolmeta_harvester.db.engine import engine
 from toolmeta_harvester.db.models import (
     Base,
-    ArtifactHarvest,
-    ShedTool,
-    ShedToolInput,
-    ShedToolOutput,
-    GalaxyWorkflowArtifact,
+    ToolHarvest,
 )
+
+from toolmeta_models import (
+    ToolArtifact,
+    ToolContract,
+    ToolInput,
+    ToolOutput,
+    ToolImplementation,
+)
+
 from toolmeta_harvester.adaptors import galaxy_toolshed
 from requests.exceptions import HTTPError
 from sqlalchemy.orm import Session
@@ -26,7 +32,7 @@ def populate_harvests_table_with_shed_tools():
     galaxy_repos = galaxy_toolshed.get_unique_repositories()
     with Session(engine) as session:
         session.add_all(
-            ArtifactHarvest(
+            ToolHarvest(
                 url=u,
                 status="pending",
                 artifact_type="galaxy_shed_tool",
@@ -37,19 +43,19 @@ def populate_harvests_table_with_shed_tools():
         session.commit()
 
 
-def get_tools_from_db():
-    """Retrieve all tools from the database."""
-    with Session(engine) as session:
-        tools = session.query(ShedTool.id, ShedTool.name,
-                              ShedTool.version).all()
-        return tools
+# def get_tools_from_db():
+#     """Retrieve all tools from the database."""
+#     with Session(engine) as session:
+#         tools = session.query(ShedTool.id, ShedTool.name,
+#                               ShedTool.version).all()
+#         return tools
 
 
 def get_error_repositories():
     """Process repositories with error status."""
     with Session(engine) as session:
         error_repos = (
-            session.query(ArtifactHarvest)
+            session.query(ToolHarvest)
             .filter_by(status="error")
             .filter_by(artifact_type="galaxy_shed_tool")
             .all()
@@ -61,9 +67,8 @@ def get_all_repositories():
     """Process repositories with error status."""
     with Session(engine) as session:
         error_repos = (
-            session.query(ArtifactHarvest)
-            .filter_by(artifact_type="galaxy_shed_tool")
-            .all()
+            session.query(ToolHarvest).filter_by(
+                artifact_type="galaxy_shed_tool").all()
         )
         for repo in error_repos:
             logger.debug(f"Repository: {repo.url} with status: {repo.status}")
@@ -74,7 +79,7 @@ def process_single_repository(repo_url, session):
     # print(f"Processing repository: {repo_url} with {len(tools)} tools found.")
     tool_folders = galaxy_toolshed.get_tool_folders(repo_url)
     for url in tool_folders:
-        results = session.query(ArtifactHarvest).filter_by(url=url).all()
+        results = session.query(ToolHarvest).filter_by(url=url).all()
         repo = None
         if len(results) > 0:
             repo = results[0]
@@ -85,7 +90,7 @@ def process_single_repository(repo_url, session):
                 )
                 continue
         else:
-            repo = ArtifactHarvest(
+            repo = ToolHarvest(
                 url=url, status="pending", artifact_type="galaxy_shed_tool"
             )
             session.add(repo)
@@ -116,22 +121,76 @@ def add_workflow_to_db(wf, session):
     if not session:
         session = Session(engine)
     try:
-        db_wf = GalaxyWorkflowArtifact(
-            uuid=wf.uuid,
+        db_wf = ToolArtifact(
+            id=wf.uuid,
             name=wf.name,
             version=wf.version,
-            description=wf.description,
-            url=wf.url,
-            input_formats=wf.input_formats,
-            output_formats=wf.output_formats,
-            input_toolshed_tools=[t.uri for t in wf.input_tools],
-            output_toolshed_tools=[t.uri for t in wf.output_tools],
-            toolshed_tools=wf.toolshed_tools,
-            raw_ga=wf.raw_ga,
-            tags=wf.tags,
+            archetype="galaxy_workflow",
+            location=wf.url,
+            raw_metadata=json.dumps(wf.raw_ga),
+            metadata_type="a_galaxy_workflow",
+            metadata_version=wf.raw_ga.get("format-version", "unknown"),
         )
+
         session.add(db_wf)
-        session.flush()  # Ensure db_tool.id is populated
+
+        db_contract = ToolContract(
+            description=wf.description,
+            contract_version="0.1",
+        )
+
+        session.add(db_contract)
+        session.flush()  # Ensure db_contract.id is populated
+
+        db_implementation = ToolImplementation(
+            contract_id=db_contract.id,
+            artifact_id=db_wf.id,
+        )
+
+        session.add(db_implementation)
+
+        for tool in wf.input_tools:
+            for input in tool.inputs:
+                logger.debug(f"Processing input: {input}")
+                input_kind = {"param": "parameter", "data": "data"}.get(
+                    input.get("tag", ""), ""
+                )
+                db_input = ToolInput(
+                    contract_id=db_contract.id,
+                    name=input.get("name", ""),
+                    role=input.get("tag", ""),
+                    input_kind=input_kind,
+                    type=input.get("type", ""),
+                    # modality=input.get("type", ""),
+                    description=input.get("label", ""),
+                    encoding_formats=[],
+                )
+                formats = input.get("format").split(
+                    ",") if input.get("format") else []
+                for fmt in formats:
+                    db_input.encoding_formats.append(fmt.strip())
+                session.add(db_input)
+
+            for output in tool.outputs:
+                db_output = ToolOutput(
+                    contract_id=db_contract.id,
+                    name=output.get("name", ""),
+                    # role=output.get("tag", ""),
+                    # modality=output.get("type", ""),
+                    type=output.get("type", ""),
+                    description=output.get("label", ""),
+                    encoding_formats=[],
+                )
+                formats = (
+                    output.get("format").split(
+                        ",") if output.get("format") else []
+                )
+                for fmt in formats:
+                    db_output.encoding_formats.append(fmt.strip())
+
+                session.add(db_output)
+
+        session.flush()
         logger.info(
             f"Adding workflow: {db_wf.id}, {
                 db_wf.name}, version: {db_wf.version}"
@@ -144,111 +203,112 @@ def add_workflow_to_db(wf, session):
         session.rollback()
 
 
-def add_tool_to_db(tool, session):
-    if not session:
-        session = Session(engine)
-    try:
-        db_tool = ShedTool(
-            uri=tool.uri,
-            id=tool.id,
-            name=tool.tool_name,
-            version=tool.version,
-            description=tool.description,
-            owner=tool.owner,
-            categories=tool.categories,
-            source_type="shed.g2.bx.psu.edu",
-            source_url=tool.repo_url,
-        )
-        session.add(db_tool)
-        # session.commit()
-        session.flush()  # Ensure db_tool.id is populated
-        logger.info(
-            f"Adding tool: {db_tool.id}, {
-                db_tool.name}, version: {db_tool.version}"
-        )
+# def add_tool_to_db(tool, session):
+#     if not session:
+#         session = Session(engine)
+#     try:
+#         db_tool = ShedTool(
+#             uri=tool.uri,
+#             id=tool.id,
+#             name=tool.tool_name,
+#             version=tool.version,
+#             description=tool.description,
+#             owner=tool.owner,
+#             categories=tool.categories,
+#             source_type="shed.g2.bx.psu.edu",
+#             source_url=tool.repo_url,
+#         )
+#         session.add(db_tool)
+#         # session.commit()
+#         session.flush()  # Ensure db_tool.id is populated
+#         logger.info(
+#             f"Adding tool: {db_tool.id}, {
+#                 db_tool.name}, version: {db_tool.version}"
+#         )
+#
+#         for input in tool.inputs:
+#             logger.debug(f"Processing input: {input}")
+#             db_input = ShedToolInput(
+#                 tool_uri=db_tool.uri,
+#                 name=input["name"],
+#                 type=input["type"],
+#                 format=[],
+#                 label=input.get("label"),
+#             )
+#             formats = input.get("format").split(
+#                 ",") if input.get("format") else []
+#             for fmt in formats:
+#                 db_input.format.append(fmt.strip())
+#
+#             session.add(db_input)
+#             # session.commit()
+#             # session.flush()
+#
+#         for output in tool.outputs:
+#             db_output = ShedToolOutput(
+#                 tool_uri=db_tool.uri,
+#                 name=output["name"],
+#                 type=output["type"],
+#                 format=[],
+#                 label=output.get("label"),
+#             )
+#             formats = output.get("format").split(
+#                 ",") if output.get("format") else []
+#             for fmt in formats:
+#                 db_output.format.append(fmt.strip())
+#
+#             session.add(db_output)
+#
+#         session.commit()
+#         session.flush()
+#     except IntegrityError as e:
+#         logger.error(f"IntegrityError for tool {tool.id}: {e}")
+#         session.rollback()
+#
 
-        for input in tool.inputs:
-            logger.debug(f"Processing input: {input}")
-            db_input = ShedToolInput(
-                tool_uri=db_tool.uri,
-                name=input["name"],
-                type=input["type"],
-                format=[],
-                label=input.get("label"),
-            )
-            formats = input.get("format").split(
-                ",") if input.get("format") else []
-            for fmt in formats:
-                db_input.format.append(fmt.strip())
 
-            session.add(db_input)
-            # session.commit()
-            # session.flush()
-
-        for output in tool.outputs:
-            db_output = ShedToolOutput(
-                tool_uri=db_tool.uri,
-                name=output["name"],
-                type=output["type"],
-                format=[],
-                label=output.get("label"),
-            )
-            formats = output.get("format").split(
-                ",") if output.get("format") else []
-            for fmt in formats:
-                db_output.format.append(fmt.strip())
-
-            session.add(db_output)
-
-        session.commit()
-        session.flush()
-    except IntegrityError as e:
-        logger.error(f"IntegrityError for tool {tool.id}: {e}")
-        session.rollback()
-
-
-def process_pending_repositories():
-    """Process repositories with pending status."""
-    with Session(engine) as session:
-        pending_repos = session.query(
-            ArtifactHarvest).filter_by(status="pending").all()
-        for repo in pending_repos:
-            try:
-                tools = galaxy_toolshed.smart_crawl_repository(repo.url)
-                logger.info(
-                    f"Processing repository: {repo.url} with {
-                        len(tools)} tools found."
-                )
-                for tool in tools:
-                    add_tool_to_db(tool, session)
-                repo.status = "processed"
-                repo.no_tools = len(tools)
-                session.commit()
-                session.flush()
-            except HTTPError as e:
-                if e.response.status_code == 403:
-                    logger.error(
-                        f"Access forbidden (403) to repository: {repo.url}")
-                    session.commit()
-                    session.flush()
-                    raise e
-                else:
-                    logger.error(
-                        f"HTTPError {e.response.status_code} for repository {
-                            repo.url}"
-                    )
-                    repo.status = "error"
-                    repo.eror_code = str(e.response.status_code)
-                    session.commit()
-                    session.flush()
-            except Exception as e:
-                logger.error(f"Error processing repository {repo.url}: {e}")
-                repo.status = "error"
-                session.commit()
-                session.flush()
-
-        session.commit()
-        session.flush()
+# def process_pending_repositories():
+#     """Process repositories with pending status."""
+#     with Session(engine) as session:
+#         pending_repos = session.query(
+#             ToolHarvest).filter_by(status="pending").all()
+#         for repo in pending_repos:
+#             try:
+#                 tools = galaxy_toolshed.smart_crawl_repository(repo.url)
+#                 logger.info(
+#                     f"Processing repository: {repo.url} with {
+#                         len(tools)} tools found."
+#                 )
+#                 for tool in tools:
+#                     add_tool_to_db(tool, session)
+#                 repo.status = "processed"
+#                 repo.no_tools = len(tools)
+#                 session.commit()
+#                 session.flush()
+#             except HTTPError as e:
+#                 if e.response.status_code == 403:
+#                     logger.error(
+#                         f"Access forbidden (403) to repository: {repo.url}")
+#                     session.commit()
+#                     session.flush()
+#                     raise e
+#                 else:
+#                     logger.error(
+#                         f"HTTPError {e.response.status_code} for repository {
+#                             repo.url}"
+#                     )
+#                     repo.status = "error"
+#                     repo.eror_code = str(e.response.status_code)
+#                     session.commit()
+#                     session.flush()
+#             except Exception as e:
+#                 logger.error(f"Error processing repository {repo.url}: {e}")
+#                 repo.status = "error"
+#                 session.commit()
+#                 session.flush()
+#
+#         session.commit()
+#         session.flush()
 
 
 def name_variants(name):
@@ -263,33 +323,33 @@ def name_variants(name):
     return variants
 
 
-def get_tools_not_in_db():
-    repos = galaxy_toolshed.load_repositories()
-    tools_in_db = get_tools_from_db()
-    tool_names_in_db = [t[1].lower() for t in tools_in_db]
-    tools_in_repos = [t["name"].lower() for t in repos]
-    tool_index = {}
-    for r in repos:
-        tool_index[r["name"]] = r
-    # print(tool_names_in_db)a
-    cnt = 0
-    for tool in tools_in_repos:
-        found = False
-        for variant in name_variants(tool):
-            if variant in tool_names_in_db:
-                found = True
-                break
-        if not found:
-            t = tool_index[tool]
-            url = t["remote_repository_url"]
-            if not url:
-                continue
-            if "github.com" not in url:
-                continue
-            cnt += 1
-            logger.debug(f"{t['name']}, {t['remote_repository_url']}")
-
-    logger.debug(f"Total tools not in DB: {cnt}")
+# def get_tools_not_in_db():
+#     repos = galaxy_toolshed.load_repositories()
+#     tools_in_db = get_tools_from_db()
+#     tool_names_in_db = [t[1].lower() for t in tools_in_db]
+#     tools_in_repos = [t["name"].lower() for t in repos]
+#     tool_index = {}
+#     for r in repos:
+#         tool_index[r["name"]] = r
+#     # print(tool_names_in_db)a
+#     cnt = 0
+#     for tool in tools_in_repos:
+#         found = False
+#         for variant in name_variants(tool):
+#             if variant in tool_names_in_db:
+#                 found = True
+#                 break
+#         if not found:
+#             t = tool_index[tool]
+#             url = t["remote_repository_url"]
+#             if not url:
+#                 continue
+#             if "github.com" not in url:
+#                 continue
+#             cnt += 1
+#             logger.debug(f"{t['name']}, {t['remote_repository_url']}")
+#
+#     logger.debug(f"Total tools not in DB: {cnt}")
 
 
 # def compare_converters():

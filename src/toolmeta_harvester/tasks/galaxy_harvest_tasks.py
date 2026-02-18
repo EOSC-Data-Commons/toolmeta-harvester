@@ -117,20 +117,6 @@ def get_db_session():
     return Session(engine)
 
 
-# db_wf = GalaxyWorkflowArtifact(
-#     uuid=wf.uuid,
-#     name=wf.name,
-#     version=wf.version,
-#     description=wf.description,
-#     url=wf.url,
-#     input_formats=wf.input_formats,
-#     output_formats=wf.output_formats,
-#     input_toolshed_tools=[t.uri for t in wf.input_tools],
-#     output_toolshed_tools=[t.uri for t in wf.output_tools],
-#     toolshed_tools=wf.toolshed_tools,
-#     raw_ga=wf.raw_ga,
-#     tags=wf.tags,
-# )
 def add_workflow_to_db(wf, session):
     if not session:
         session = Session(engine)
@@ -281,48 +267,48 @@ def add_workflow_to_db(wf, session):
 #
 
 
-def process_pending_repositories():
-    """Process repositories with pending status."""
-    with Session(engine) as session:
-        pending_repos = session.query(
-            ToolHarvest).filter_by(status="pending").all()
-        for repo in pending_repos:
-            try:
-                tools = galaxy_toolshed.smart_crawl_repository(repo.url)
-                logger.info(
-                    f"Processing repository: {repo.url} with {
-                        len(tools)} tools found."
-                )
-                for tool in tools:
-                    add_tool_to_db(tool, session)
-                repo.status = "processed"
-                repo.no_tools = len(tools)
-                session.commit()
-                session.flush()
-            except HTTPError as e:
-                if e.response.status_code == 403:
-                    logger.error(
-                        f"Access forbidden (403) to repository: {repo.url}")
-                    session.commit()
-                    session.flush()
-                    raise e
-                else:
-                    logger.error(
-                        f"HTTPError {e.response.status_code} for repository {
-                            repo.url}"
-                    )
-                    repo.status = "error"
-                    repo.eror_code = str(e.response.status_code)
-                    session.commit()
-                    session.flush()
-            except Exception as e:
-                logger.error(f"Error processing repository {repo.url}: {e}")
-                repo.status = "error"
-                session.commit()
-                session.flush()
-
-        session.commit()
-        session.flush()
+# def process_pending_repositories():
+#     """Process repositories with pending status."""
+#     with Session(engine) as session:
+#         pending_repos = session.query(
+#             ToolHarvest).filter_by(status="pending").all()
+#         for repo in pending_repos:
+#             try:
+#                 tools = galaxy_toolshed.smart_crawl_repository(repo.url)
+#                 logger.info(
+#                     f"Processing repository: {repo.url} with {
+#                         len(tools)} tools found."
+#                 )
+#                 for tool in tools:
+#                     add_tool_to_db(tool, session)
+#                 repo.status = "processed"
+#                 repo.no_tools = len(tools)
+#                 session.commit()
+#                 session.flush()
+#             except HTTPError as e:
+#                 if e.response.status_code == 403:
+#                     logger.error(
+#                         f"Access forbidden (403) to repository: {repo.url}")
+#                     session.commit()
+#                     session.flush()
+#                     raise e
+#                 else:
+#                     logger.error(
+#                         f"HTTPError {e.response.status_code} for repository {
+#                             repo.url}"
+#                     )
+#                     repo.status = "error"
+#                     repo.eror_code = str(e.response.status_code)
+#                     session.commit()
+#                     session.flush()
+#             except Exception as e:
+#                 logger.error(f"Error processing repository {repo.url}: {e}")
+#                 repo.status = "error"
+#                 session.commit()
+#                 session.flush()
+#
+#         session.commit()
+#         session.flush()
 
 
 def name_variants(name):

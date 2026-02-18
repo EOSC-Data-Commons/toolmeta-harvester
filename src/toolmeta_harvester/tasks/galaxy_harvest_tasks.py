@@ -71,8 +71,7 @@ def get_all_repositories():
     """Process repositories with error status."""
     with Session(engine) as session:
         error_repos = (
-            session.query(ToolHarvest).filter_by(
-                artifact_type="galaxy_shed_tool").all()
+            session.query(ToolHarvest).filter_by(artifact_type="galaxy_shed_tool").all()
         )
         for repo in error_repos:
             logger.debug(f"Repository: {repo.url} with status: {repo.status}")
@@ -89,8 +88,7 @@ def process_single_repository(repo_url, session):
             repo = results[0]
             if repo.status == "completed":
                 logger.debug(
-                    f"Repository {
-                        url} already exists in the database. Skipping."
+                    f"Repository {url} already exists in the database. Skipping."
                 )
                 continue
         else:
@@ -163,16 +161,20 @@ def add_workflow_to_db(wf, session):
         for tool in wf.input_tools:
             for input in tool.inputs:
                 logger.debug(f"Processing input: {input}")
+                input_kind = {"param": "parameter", "data": "data"}.get(
+                    input.get("tag", ""), ""
+                )
                 db_input = ToolInput(
                     contract_id=db_contract.id,
                     name=input.get("name", ""),
                     role=input.get("tag", ""),
-                    modality=input.get("type", ""),
+                    input_kind=input_kind,
+                    type=input.get("type", ""),
+                    # modality=input.get("type", ""),
                     description=input.get("label", ""),
                     encoding_formats=[],
                 )
-                formats = input.get("format").split(
-                    ",") if input.get("format") else []
+                formats = input.get("format").split(",") if input.get("format") else []
                 for fmt in formats:
                     db_input.encoding_formats.append(fmt.strip())
                 session.add(db_input)
@@ -182,13 +184,13 @@ def add_workflow_to_db(wf, session):
                     contract_id=db_contract.id,
                     name=output.get("name", ""),
                     # role=output.get("tag", ""),
-                    modality=output.get("type", ""),
+                    # modality=output.get("type", ""),
+                    type=output.get("type", ""),
                     description=output.get("label", ""),
                     encoding_formats=[],
                 )
                 formats = (
-                    output.get("format").split(
-                        ",") if output.get("format") else []
+                    output.get("format").split(",") if output.get("format") else []
                 )
                 for fmt in formats:
                     db_output.encoding_formats.append(fmt.strip())
@@ -197,8 +199,7 @@ def add_workflow_to_db(wf, session):
 
         session.flush()
         logger.info(
-            f"Adding workflow: {db_wf.id}, {
-                db_wf.name}, version: {db_wf.version}"
+            f"Adding workflow: {db_wf.id}, {db_wf.name}, version: {db_wf.version}"
         )
 
         session.commit()
@@ -275,14 +276,12 @@ def add_workflow_to_db(wf, session):
 def process_pending_repositories():
     """Process repositories with pending status."""
     with Session(engine) as session:
-        pending_repos = session.query(
-            ToolHarvest).filter_by(status="pending").all()
+        pending_repos = session.query(ToolHarvest).filter_by(status="pending").all()
         for repo in pending_repos:
             try:
                 tools = galaxy_toolshed.smart_crawl_repository(repo.url)
                 logger.info(
-                    f"Processing repository: {repo.url} with {
-                        len(tools)} tools found."
+                    f"Processing repository: {repo.url} with {len(tools)} tools found."
                 )
                 for tool in tools:
                     add_tool_to_db(tool, session)
@@ -292,15 +291,13 @@ def process_pending_repositories():
                 session.flush()
             except HTTPError as e:
                 if e.response.status_code == 403:
-                    logger.error(
-                        f"Access forbidden (403) to repository: {repo.url}")
+                    logger.error(f"Access forbidden (403) to repository: {repo.url}")
                     session.commit()
                     session.flush()
                     raise e
                 else:
                     logger.error(
-                        f"HTTPError {e.response.status_code} for repository {
-                            repo.url}"
+                        f"HTTPError {e.response.status_code} for repository {repo.url}"
                     )
                     repo.status = "error"
                     repo.eror_code = str(e.response.status_code)

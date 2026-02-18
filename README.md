@@ -18,9 +18,21 @@
 - [ ] Basic tests and CI pipeline
 - [ ] Create initial embedding pipeline
 
+# Installation and Usage
 
+## Prerequisites
+- Python 3.12+
+- Docker
+- uv
+
+## Credentials
+Setup `config/.secrets.toml` with Github API token
+
+## Setup
 ```
-uv sync
-uv pip install -e .
-uv run src/toolmeta_harvester/main.py
+make install
 ```
+
+Boots Postgres Docker container
+
+

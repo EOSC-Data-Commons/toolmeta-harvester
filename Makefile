@@ -43,6 +43,7 @@ postgres-up:
 	  	-e POSTGRES_USER=$(TOOL_REGISTRY_DATABASE__USER) \
 	  	-e POSTGRES_PASSWORD=$(TOOL_REGISTRY_DATABASE__PASSWORD) \
 	  	-v $(POSTGRES_VOLUME):/var/lib/postgresql/data \
+	  	-v $(PWD)/docker/postgres/init:/docker-entrypoint-initdb.d \
 	  	pgvector/pgvector:0.8.1-pg16-trixie
 	  	# postgres:16
 

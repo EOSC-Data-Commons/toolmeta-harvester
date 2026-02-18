@@ -33,6 +33,12 @@ Setup `config/.secrets.toml` with Github API token
 make install
 ```
 
-Boots Postgres Docker container
+Boots Postgres Docker container and installs dependencies
+
+```
+make run
+```
+
+Runs a default pipeline that harvests data from WorkflowHub, stores it in the db.
 
 

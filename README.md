@@ -16,6 +16,7 @@
 - [ ] Deployment to Warehouse
 - [ ] Basic documentation (README, setup, usage)
 - [ ] Basic tests and CI pipeline
+- [ ] Create initial embedding pipeline
 
 
 ```

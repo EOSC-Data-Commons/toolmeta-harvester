@@ -139,15 +139,13 @@ def parse_xml(tool_xml, dir_contents=None, repo_url=""):
         except XMLSyntaxError as e:
             # Some macro.xml files use relative paths
             if macro_xml.startswith("../"):
-                logger.debug(
-                    f"Retrying macro file with relative path: {macro_file}")
+                logger.debug(f"Retrying macro file with relative path: {macro_file}")
                 macro_url = urljoin(macro_url, macro_xml)
                 macro_xml = fetch_xml(macro_url)
                 macro_tree = etree.fromstring(macro_xml.encode())
             else:
                 logger.error(
-                    f"Error parsing macro file {
-                        macro_file} from {macro_url}: {e}"
+                    f"Error parsing macro file {macro_file} from {macro_url}: {e}"
                 )
                 continue
         tokens.update(extract_tokens(macro_tree))
@@ -164,8 +162,7 @@ def parse_xml(tool_xml, dir_contents=None, repo_url=""):
         try:
             etree.fromstring(new_xml.encode())
         except XMLSyntaxError:
-            logger.debug(
-                "Substituted XML is invalid, stopping token substitution.")
+            logger.debug("Substituted XML is invalid, stopping token substitution.")
             new_xml = tmp_xml
             break
 
@@ -246,11 +243,7 @@ def fetch_toolshed_tool(tool_uri: str) -> ToolInfo:
     tool_meta = fetch_toolshed_tool_meta(tool_uri)[0]
     repo_api_url = convert_git_url_to_api(tool_meta["remote_repository_url"])
     if not repo_api_url:
-        raise ValueError(
-            f"Could not convert git URL to API URL: {
-                tool_meta['remote_repository_url']
-            }"
-        )
+        raise ValueError(f"Could not convert git URL to API URL: {tool_uri}")
     for url, tools in smart_crawl_repository_iter(repo_api_url):
         for tool in tools:
             if tool.id == tool_name:
@@ -399,10 +392,8 @@ def get_git_tree(repo_api_url):
     r.raise_for_status()
 
     branch = r.json()["default_branch"]
-    tree_url = f"https://api.github.com/repos/{
-        owner}/{repo}/git/trees/{branch}"
-    r = requests.get(tree_url, params={
-                     "recursive": "1"}, timeout=30, headers=HEADERS)
+    tree_url = f"https://api.github.com/repos/{owner}/{repo}/git/trees/{branch}"
+    r = requests.get(tree_url, params={"recursive": "1"}, timeout=30, headers=HEADERS)
     r.raise_for_status()
     return (branch, r.json())
 
@@ -441,10 +432,11 @@ def get_tool_folders(repo_api_url):
         ):
             folder = "/".join(item["path"].split("/")[:-1])
             if folder.startswith(base_path):
-                folder = folder[len(base_path):]
+                folder = folder[len(base_path) :]
             folder = f"{strip_query(repo_api_url)}/{folder}?ref={branch}"
-            logger.debug("Found tool url folder:", folder)
-            tool_folders.add(folder)
+            if folder:
+                logger.debug(f"Found tool url folder: {folder}")
+                tool_folders.add(folder)
     return list(tool_folders)
 
 

@@ -19,6 +19,7 @@ from toolmeta_harvester.adaptors import galaxy_toolshed
 from requests.exceptions import HTTPError
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -142,6 +143,14 @@ def add_workflow_to_generic_table(wf, session):
     if not session:
         session = Session(engine)
     try:
+        existing = session.execute(
+            select(ToolGeneric).where(ToolGeneric.uri == wf.url)
+        ).scalar_one_or_none()
+
+        if existing:
+            logger.info(f"Workflow with URL {wf.url} already exists in generic table. Skipping insert.")
+            return existing  # Already in DB → return it
+
         wf_generic = ToolGeneric(
             id=wf.uuid,
             uri=wf.url,
@@ -161,12 +170,15 @@ def add_workflow_to_generic_table(wf, session):
         session.add(wf_generic)
         session.commit()
         session.flush()
+        return wf_generic
     except IntegrityError as e:
-        logger.warning(f"IntegrityError for workflow tool {db_wf.id}: {e}")
+        logger.warning(f"IntegrityError for workflow tool {wf.uuid}: {e}")
         session.rollback()
+        return None
     except Exception as e:
         logger.error(f"Error adding workflow {wf.uuid} to generic table: {e}")
         session.rollback()
+        raise 
 
 def add_workflow_to_db(wf, session):
     if not session:

@@ -12,12 +12,14 @@ from toolmeta_models import (
     ToolInput,
     ToolOutput,
     ToolImplementation,
+    ToolGeneric,
 )
 
 from toolmeta_harvester.adaptors import galaxy_toolshed
 from requests.exceptions import HTTPError
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +118,67 @@ def process_single_repository(repo_url, session):
 def get_db_session():
     return Session(engine)
 
+
+def get_input_formats(wf):
+    results = set()    
+    for tool in wf.input_tools:
+        for input in tool.inputs:
+            formats = input.get("format").split(
+                ",") if input.get("format") else []
+            for fmt in formats:
+                results.add(fmt.strip())
+    return list(results)
+
+def get_output_formats(wf):
+    results = set()    
+    for tool in wf.output_tools:
+        for output in tool.outputs:
+            formats = output.get("format").split(
+                ",") if output.get("format") else []
+            for fmt in formats:
+                results.add(fmt.strip())
+    return list(results)
+
+def add_workflow_to_generic_table(wf, session):
+    if not session:
+        session = Session(engine)
+    try:
+        existing = session.execute(
+            select(ToolGeneric).where(ToolGeneric.uri == wf.url)
+        ).scalar_one_or_none()
+
+        if existing:
+            logger.info(f"Workflow with URL {wf.url} already exists in generic table. Skipping insert.")
+            return existing  # Already in DB → return it
+
+        wf_generic = ToolGeneric(
+            id=wf.uuid,
+            uri=wf.url,
+            name=wf.name,
+            description=wf.description,
+            version=wf.version,
+            archetype="galaxy_workflow",
+            input_file_formats=get_input_formats(wf),
+            output_file_formats=get_output_formats(wf),
+            location=wf.url,
+            raw_metadata=wf.raw_ga,
+            metadata_schema={},
+            metadata_type="a_galaxy_workflow",
+            metadata_version=wf.raw_ga.get("format-version", "unknown"),
+            created_by="admin",
+        )
+        session.add(wf_generic)
+        session.commit()
+        session.flush()
+        return wf_generic
+    except IntegrityError as e:
+        logger.warning(f"IntegrityError for workflow tool {wf.uuid}: {e}")
+        session.rollback()
+        return None
+    except Exception as e:
+        logger.error(f"Error adding workflow {wf.uuid} to generic table: {e}")
+        session.rollback()
+        raise 
 
 def add_workflow_to_db(wf, session):
     if not session:

@@ -49,8 +49,6 @@ def load_git_config() -> GitConfig:
 
 
 def load_db_config() -> DatabaseConfig:
-    print("Loading database configuration:")
-    print(json.dumps(settings.as_dict(), indent=2))
     db = settings.database
     return DatabaseConfig(
         host=db["host"],

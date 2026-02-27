@@ -42,6 +42,7 @@ class ToolInfo:
     owner: str
     version: str
     description: str
+    help: str
     categories: list
     inputs: list
     outputs: list
@@ -207,6 +208,7 @@ def parse_xml(tool_xml, dir_contents=None, repo_url=""):
         or shed_yml.get("description")
         or ""
     )
+    help = tree.findtext("help") or ""
     owner = shed_yml.get("owner", "")
     categories = shed_yml.get("categories", [])
     categories = [c.strip().lower() for c in categories if c.strip()]
@@ -218,6 +220,7 @@ def parse_xml(tool_xml, dir_contents=None, repo_url=""):
         tool_name=tool_name,
         version=version,
         description=description,
+        help=help,
         owner=owner,
         categories=categories,
         inputs=inputs,
@@ -225,21 +228,61 @@ def parse_xml(tool_xml, dir_contents=None, repo_url=""):
         repo_url=repo_url,
     )
 
-
-def get_shed_tool_name(tool_uri: str) -> str:
+def get_shed_uri_parts(tool_uri: str):
     """
-    Extract ToolShed tool name from Galaxy tool_id.
+    Extract ToolShed URI parts from Galaxy tool_id.
     Example tool_id: toolshed.g2.bx.psu.edu/repos/devteam/bwa_mem/bwa_mem/
+    Returns (host, owner, repo, name, revision)
     """
     parts = tool_uri.split("/")
     if not tool_uri.startswith("toolshed."):
         raise ValueError(f"Not a ToolShed tool_id: {tool_uri}")
-    tool_name = parts[4]
-    return tool_name
+    host = parts[0]
+    owner = parts[2]
+    repo = parts[3]
+    name = parts[4]
+    revision = parts[-1]
+    return host, owner, repo, name, revision
 
+# def get_shed_tool_name(tool_uri: str) -> str:
+#     """
+#     Extract ToolShed tool name from Galaxy tool_id.
+#     Example tool_id: toolshed.g2.bx.psu.edu/repos/devteam/bwa_mem/bwa_mem/
+#     """
+#     parts = tool_uri.split("/")
+#     if not tool_uri.startswith("toolshed."):
+#         raise ValueError(f"Not a ToolShed tool_id: {tool_uri}")
+#     tool_name = parts[4]
+#     return tool_name
+
+def strip_http(url: str) -> str:
+    return url.removeprefix("http://").removeprefix("https://")
+
+def fetch_tool_meta_from_shed_api(tool_uri: str) -> dict:
+    """
+    Fetch ToolShed tool metadata given a Galaxy tool_id.
+    N.B. The returned JSON does not seem to contain input formats
+    """
+    tool_uri = strip_http(tool_uri)
+    parts = tool_uri.split("/")
+    if not tool_uri.startswith("toolshed."):
+        raise ValueError(f"Not a ToolShed tool_id: {tool_uri}")
+
+    host = parts[0]
+    owner = parts[2]
+    repo = parts[3]
+    name = parts[4]
+    revision = parts[-1]
+
+    url = f"https://{host}/api/tools/{owner}~{repo}~{name}/versions/{revision}"
+
+    r = requests.get(url, timeout=120)
+    r.raise_for_status()
+    return r.json()
 
 def fetch_toolshed_tool(tool_uri: str) -> ToolInfo:
-    tool_name = get_shed_tool_name(tool_uri)
+    _, owner, repo, tool_name, version = get_shed_uri_parts(tool_uri)
+    # tool_name = get_shed_tool_name(tool_uri)
     tool_meta = fetch_toolshed_tool_meta(tool_uri)[0]
     repo_api_url = convert_git_url_to_api(tool_meta["remote_repository_url"])
     if not repo_api_url:
@@ -248,6 +291,10 @@ def fetch_toolshed_tool(tool_uri: str) -> ToolInfo:
         for tool in tools:
             if tool.id == tool_name:
                 tool.uri = tool_uri
+                if version != tool.version:
+                    logger.warning(
+                        f"Version mismatch for {tool_uri}: expected {version}, found {tool.version}"
+                    )
                 return tool
     return None
 

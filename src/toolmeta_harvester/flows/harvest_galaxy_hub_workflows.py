@@ -30,7 +30,8 @@ def pipeline_harvest_workflow_hub(no_of_workflows: int = 10):
         logger.info("-" * 40)
 
         # Step 3: Store Galaxy Workflow in DB
-        ght.add_workflow_to_db(workflow_info, session)
+        # ght.add_workflow_to_db(workflow_info, session)
+        ght.add_workflow_to_generic_table(workflow_info, session)
         logger.info("Added workflow and tools to the database.")
 
         number_of_wf_to_harvest += 1

@@ -47,10 +47,17 @@ def get_tools_connected_to_inputs(ga):
         if step_type == "tool":
             input_connections = step.get("input_connections", {})
             for input_name, connection in input_connections.items():
-                conn_id = str(connection["id"])
-                if conn_id in input_step_ids:
-                    input_tools.append(step.get("tool_id")
-                                       or step.get("content_id"))
+                if isinstance(connection, list):
+                    for c in connection:
+                        conn_id = str(c["id"])
+                        if conn_id in input_step_ids:
+                            input_tools.append(step.get("tool_id")
+                                               or step.get("content_id"))
+                else:
+                    conn_id = str(connection["id"])
+                    if conn_id in input_step_ids:
+                        input_tools.append(step.get("tool_id")
+                                        or step.get("content_id"))
 
     return input_tools
 
@@ -64,9 +71,15 @@ def get_outputs(ga):
     for step_id, step in steps.items():
         input_connections = step.get("input_connections", {})
         for input_name, connection in input_connections.items():
-            conn_id = str(connection["id"])
-            if conn_id in ref_step_ids:
-                ref_step_ids[conn_id] += 1
+            if isinstance(connection, list):
+                for c in connection:
+                    conn_id = str(c["id"])
+                    if conn_id in ref_step_ids:
+                        ref_step_ids[conn_id] += 1
+            else:
+                conn_id = str(connection["id"])
+                if conn_id in ref_step_ids:
+                    ref_step_ids[conn_id] += 1
     for step_id, step in steps.items():
         if ref_step_ids[step_id] == 0:
             outputs.append(
@@ -146,7 +159,7 @@ def get_shed_inputs(ga):
             if tool:
                 input_tools.append(tool)
                 seen.add(tool_uri)
-                logger.info(f"Added input tool: {tool}")
+                logger.debug(f"Added input tool: {tool}")
                 continue
         except Exception:
             logger.exception(f"Retrieving input shed tool: {

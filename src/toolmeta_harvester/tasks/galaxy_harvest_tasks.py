@@ -152,7 +152,6 @@ def add_workflow_to_generic_table(wf, session):
             return existing  # Already in DB → return it
 
         wf_generic = ToolGeneric(
-            id=wf.uuid,
             uri=wf.url,
             name=wf.name,
             description=wf.description,
@@ -172,11 +171,11 @@ def add_workflow_to_generic_table(wf, session):
         session.flush()
         return wf_generic
     except IntegrityError as e:
-        logger.warning(f"IntegrityError for workflow tool {wf.uuid}: {e}")
+        logger.warning(f"IntegrityError for workflow tool {wf.url}: {e}")
         session.rollback()
         return None
     except Exception as e:
-        logger.error(f"Error adding workflow {wf.uuid} to generic table: {e}")
+        logger.error(f"Error adding workflow {wf.url} to generic table: {e}")
         session.rollback()
         raise 
 

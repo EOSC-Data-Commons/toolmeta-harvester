@@ -24,9 +24,9 @@ def pipeline_harvest_workflow_hub(no_of_workflows: int = 10):
         logger.info(f"URL: {workflow_info.url}")
         logger.info(f"Input data types: {len(workflow_info.inputs)}")
         logger.info(f"Output data types: {len(workflow_info.outputs)}")
-        logger.info(f"Toolshed tools used: {
+        logger.debug(f"Toolshed tools used: {
                     len(workflow_info.toolshed_tools)}")
-        logger.info(workflow_info.toolshed_tools)
+        logger.debug(workflow_info.toolshed_tools)
         logger.info("-" * 40)
 
         # Step 3: Store Galaxy Workflow in DB

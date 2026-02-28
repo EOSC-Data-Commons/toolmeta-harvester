@@ -164,7 +164,7 @@ def get_shed_inputs(ga):
                 logger.debug(f"Added input tool: {tool}")
                 continue
         except Exception:
-            logger.exception(f"Retrieving input shed tool: {
+            logger.warning(f"Error retrieving input shed tool: {
                              tool_uri}, skipping...")
             continue
     return input_tools

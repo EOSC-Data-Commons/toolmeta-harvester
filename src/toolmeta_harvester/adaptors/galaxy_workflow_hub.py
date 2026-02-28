@@ -113,13 +113,15 @@ def get_ga_workflow(w):
 
 
 # Iterate over Galaxy workflows in the Workflow Hub
-
-
 def iter_workflows():
     workflows = get_hub_workflows(type="galaxy")
     for wf in workflows:
-        ga_w = get_ga_workflow(wf)
-        workflow_info = ga_workflow.parse_workflow(ga_w)
-        workflow_info.url = wf["url"]
-        workflow_info.description = wf.get("description", "")
-        yield workflow_info
+        try:
+            ga_w = get_ga_workflow(wf)
+            workflow_info = ga_workflow.parse_workflow(ga_w)
+            workflow_info.url = wf["url"]
+            workflow_info.description = wf.get("description", "")
+            yield workflow_info
+        except Exception as e:
+            logger.error(f"Error processing workflow {wf}: {e}")
+            continue

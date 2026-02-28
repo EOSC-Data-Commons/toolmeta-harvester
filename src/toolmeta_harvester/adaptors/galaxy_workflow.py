@@ -34,6 +34,8 @@ def get_step_shed_tools(ga):
 
 
 def is_shed_uri(tool_id: str) -> bool:
+    if not tool_id:
+        return False
     return tool_id.startswith("toolshed.")
 
 

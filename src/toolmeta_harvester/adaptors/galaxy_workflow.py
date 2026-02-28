@@ -117,7 +117,7 @@ def get_shed_outputs(ga):
                 seen.add(tool_uri)
                 continue
         except Exception:
-            logger.exception(f"Retrieving output shed tool: {
+            logger.warning(f"Error retrieving output shed tool: {
                              tool_uri}, skipping...")
             continue
     return output_tools

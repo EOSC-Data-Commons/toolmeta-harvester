@@ -1,5 +1,7 @@
 **/.DS_Store
 cache/
+logs/
+*.log
 **/*_cache.sqlite
 **/.secrets.toml
 *.dump

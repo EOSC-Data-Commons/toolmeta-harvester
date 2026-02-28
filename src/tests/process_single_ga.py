@@ -5,6 +5,7 @@ from toolmeta_harvester.adaptors import galaxy_workflow as ga_workflow
 logger = logging.getLogger(__name__)
 
 WORKFLOW_HUB_URL = "https://workflowhub.eu/workflows/123"
+# WORKFLOW_HUB_URL = "https://workflowhub.eu/workflows/685" # Auth error
 
 def main():
     logger.info(f"Fetching workflow from {WORKFLOW_HUB_URL}...")

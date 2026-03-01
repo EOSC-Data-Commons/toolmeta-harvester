@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 def main():
     logger.info("Starting Galaxy Hub workflow harvesting process.")
-    gwh.pipeline_harvest_workflow_hub(1)
+    gwh.pipeline_harvest_workflow_hub(5)
 
 
 if __name__ == "__main__":

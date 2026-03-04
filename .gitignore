@@ -6,6 +6,7 @@ logs/
 **/.secrets.toml
 *.dump
 *.sql
+*.out
 
 # alembic
 alembic.ini

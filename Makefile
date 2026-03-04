@@ -33,6 +33,14 @@ sync:
 	uv sync
 	uv pip install -e .
 
+postgres-dump:
+	@echo "Dumping 'tool_generic' table from Postgres container '$(POSTGRES_CONTAINER)' to 'tool_generic.sql'..."
+	docker exec  $(POSTGRES_CONTAINER) pg_dump -U $(TOOL_REGISTRY_DATABASE__USER) -d $(TOOL_REGISTRY_DATABASE__NAME) -t tool_generic --no-owner --no-privileges -Fc > tool_generic.dump
+
+postgres-restore:
+	@echo "Restoring 'tool_generic' table to Postgres container '$(POSTGRES_CONTAINER)' from 'tool_generic.sql'..."
+	docker exec -i $(POSTGRES_CONTAINER) pg_restore -U $(TOOL_REGISTRY_DATABASE__USER) -d $(TOOL_REGISTRY_DATABASE__NAME) < tool_generic.dump
+
 .PHONY: postgres-up postgres-down postgres-logs postgres-reset
 postgres-up:
 	# Use pgvector image which is postgres with pgvector extension pre-installed, which is required for vector search capabilities in the tool registry.

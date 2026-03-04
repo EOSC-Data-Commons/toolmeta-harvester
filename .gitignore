@@ -5,6 +5,7 @@ logs/
 **/*_cache.sqlite
 **/.secrets.toml
 *.dump
+*.sql
 
 # alembic
 alembic.ini

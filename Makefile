@@ -53,7 +53,6 @@ postgres-up:
 	  	-v $(POSTGRES_VOLUME):/var/lib/postgresql/data \
 	  	-v $(PWD)/docker/postgres/init:/docker-entrypoint-initdb.d \
 	  	pgvector/pgvector:0.8.1-pg16-trixie
-	  	# postgres:16
 
 postgres-down:
 	@echo "Stopping and removing Postgres container '$(POSTGRES_CONTAINER)'..."

@@ -50,7 +50,7 @@ def post_json_to_registry(data, api_url, token=None, timeout=10):
     if not token:
             return {
                 "success": False,
-                "status": 443,
+                "status": 403,
                 "error": "No Token provided"
             }
 

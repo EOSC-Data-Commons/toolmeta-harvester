@@ -2,7 +2,7 @@ import logging
 import json
 import requests
 import subprocess
-import requests_cache
+# import requests_cache
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -10,12 +10,11 @@ logger = logging.getLogger(__name__)
 VIP_INDEX_URL = "https://vip.creatis.insa-lyon.fr/rest/pipelines?public"
 REPO_URL ="https://github.com/virtual-imaging-platform/vip-apps-boutiques-descriptors"
 LOCAL_DIR = Path("cache/vip-apps-boutiques-descriptors")
-TOOLS_REGISTRY_URL = "localhost:8080/api/v1/tools"
 
 # Initialize requests cache
-requests_cache.install_cache(
-    "cache/vip_cache", backend="sqlite", expire_after=86400
-)
+# requests_cache.install_cache(
+#     "cache/vip_cache", backend="sqlite", expire_after=86400
+# )
 
 def get_vip_index():
     try:
@@ -66,11 +65,7 @@ def url_exists(url):
 def process_json_file(path):
     try:
         with open(path, "r", encoding="utf-8") as f:
-            # git_url = build_git_url(*get_repo_info(), path)
-            # logger.debug(f"Git url {git_url}")
             data = json.load(f)
-            # data["location"] = git_url
-        
         return data
     except Exception as e:
         logger.warning(f"Failed to read {path}: {e}")
@@ -147,22 +142,68 @@ def get_output_descriptions(data):
         descriptions.append(desc)
     return descriptions
 
-def post_tools(apps):
-    for (name, version), tool in apps.items():
-        logger.info(f"Posting tool {name} version {version} to registry")
-        result = post_json_to_registry(tool, TOOLS_REGISTRY_URL)
-        if result["success"]:
-            logger.info(f"Successfully posted {name} version {version}")
+def get_tools(api_url):
+    try:
+        response = requests.get(api_url, timeout=10)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        logger.error(f"Failed to fetch tools: {e}")
+        return []
+
+def patch_tool(id, data, api_url, token, timeout=10):
+    headers = {
+        "Content-Type": "application/json",
+    }
+    if not token:
+            return {
+                "success": False,
+                "status": 443,
+                "error": "No Token provided"
+            }
+
+    headers["Authorization"] = f"Bearer {token}"
+
+    try:
+        tool_url = f"{api_url}{id}"
+        response = requests.patch(
+            tool_url,
+            json=data,
+            headers=headers,
+            timeout=timeout
+        )
+
+        if response.status_code in (200, 201):
+            return {
+                "success": True,
+                "status": response.status_code,
+                "response": response.json() if response.content else None
+            }
         else:
-            logger.error(f"Failed to post {name} version {version}: {result.get('error', 'Unknown error')}")
+            return {
+                "success": False,
+                "status": response.status_code,
+                "error": response.text
+            }
+
+    except requests.RequestException as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
 
 def post_json_to_registry(data, api_url, token=None, timeout=10):
     headers = {
         "Content-Type": "application/json",
     }
+    if not token:
+            return {
+                "success": False,
+                "status": 443,
+                "error": "No Token provided"
+            }
 
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
+    headers["Authorization"] = f"Bearer {token}"
 
     try:
         response = requests.post(

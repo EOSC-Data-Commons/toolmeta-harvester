@@ -47,6 +47,9 @@ def load_git_config() -> GitConfig:
         api_key=git["api_key"],
     )
 
+def egi_token() -> str:
+    egi = settings.egi
+    return egi["token"]
 
 def load_db_config() -> DatabaseConfig:
     db = settings.database

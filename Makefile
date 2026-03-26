@@ -15,7 +15,11 @@ check-secrets:
 run:run-local
 
 run-local: 
-	uv run src/main.py
+	@echo "Run one of the flows in src/toolmeta_harvester/flows/"
+	@echo "-----"
+	ls -la src/toolmeta_harvester/flows/*.py
+	@echo "-----"
+	@echo "uv run src/toolmeta_harvester/flows/flow_name.py"
 
 .PHONY: re-install install
 re-install: clean sync

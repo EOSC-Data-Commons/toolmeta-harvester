@@ -49,7 +49,7 @@ def get_repo_info():
     parts = url.split("/")
     owner, repo = parts[-2], parts[-1]
     branch = run_git_command(["rev-parse", "--abbrev-ref", "HEAD"], cwd=LOCAL_DIR)
-    return owner, repo, branch
+    return owner.strip(), repo.strip(), branch.strip()
 
 def build_git_url(owner, repo, branch, file_path):
     rel = file_path.relative_to(LOCAL_DIR).as_posix()

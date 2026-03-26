@@ -14,7 +14,7 @@
 - [x] Data models for Galaxy tools and workflows
 - [x] Generalized data model for artifacts and contracts
 - [x] Initial data harvesting and storage from WorkflowHub
-- [ ] Deployment to Warehouse
+- [x] Deployment to Warehouse
 - [ ] Basic documentation (README, setup, usage)
 - [ ] Basic tests and CI pipeline
 - [ ] Create initial embedding pipeline

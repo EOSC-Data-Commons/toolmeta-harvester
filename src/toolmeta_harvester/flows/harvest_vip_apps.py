@@ -1,14 +1,25 @@
 import logging
+from pathlib import Path
 from toolmeta_harvester import config
 from toolmeta_harvester.tasks import harvest_vip_tasks as vip
+LOG_FILE = Path("logs/harvest_galaxy_hub_workflows.log")
+# Create directory if it does not exist
+LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format="%(asctime)s %(name)s %(levelname)s: %(message)s",
+    handlers=[logging.StreamHandler(),
+              logging.FileHandler(LOG_FILE)],
 )
+
 logger = logging.getLogger(__name__)
 
 # Important: Ensure ending forward slash in API_URL for correct endpoint construction in post_json_to_registry
+# Development API URL
 API_URL = "https://tool-registry.eosc-data-commons.dansdemo.nl/api/v1/tools/"
+# Production API URL
+# API_URL = "https://dev.tools-registry.eosc-data-commons.eu/api/v1/tools/"
 TOKEN = config.egi_token()
 
 def harvest_vip():

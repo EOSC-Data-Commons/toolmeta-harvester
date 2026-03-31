@@ -7,10 +7,8 @@ logs/
 *.dump
 *.sql
 *.out
+*.db
 
-# alembic
-alembic.ini
-alembic/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

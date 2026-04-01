@@ -66,8 +66,6 @@ def retrieve_json(url, cache_file, use_cache=True):
 
 
 # Extract Galaxy workflow from ZIP file at given URL
-
-
 def extract_galaxy_workflow_from_zip(url):
     response = requests.get(url, timeout=30)
     response.raise_for_status()
@@ -86,16 +84,36 @@ def extract_galaxy_workflow_from_zip(url):
             return json.load(ga_file)
 
 
+# Get latest version of a workflow from Workflow Hub
+def get_latest_workflow_version(w):
+    versions = w.get("versions", [])
+    if not versions:
+        return None
+    # Assuming versions are sorted by version number, take the last one
+    latest_version = versions[-1]
+    return latest_version
+
+def get_latest_workflow_version_id(w):
+    latest_version = get_latest_workflow_version(w)
+    if not latest_version:
+        return None
+    return latest_version["id"] if "id" in latest_version else None
+
+def get_latest_workflow_version_name(w):
+    latest_version = get_latest_workflow_version(w)
+    if not latest_version:
+        return None
+    return latest_version["name"] if "name" in latest_version else None
+
 # Get workflows from Workflow Hub, optionally filtering by type
-
-
 def get_hub_workflows(type=None):
     workflows = retrieve_json(f"{WORKFLOW_HUB_API}/tools/", HUB_CACHE_FILE, True)
     if not type:
         return workflows
     results = []
     for w in workflows:
-        workflow_types = w["versions"][0]["descriptor_type"]
+        # workflow_types = w["versions"][0]["descriptor_type"]
+        workflow_types = get_latest_workflow_version(w).get("descriptor_type", [])
         workflow_type = workflow_types[0].lower() if len(workflow_types) > 0 else None
         if workflow_type != type.lower():
             continue
@@ -104,10 +122,11 @@ def get_hub_workflows(type=None):
 
 
 # Get Galaxy workflow from Workflow Hub entry
-
-
 def get_ga_workflow(w):
-    download_url = f"{w['url']}/download"
+    version_id = get_latest_workflow_version_id(w)
+    # download_url = f"{w['url']}/download"
+    download_url = f"{w['url']}/ro_crate?version={version_id}"
+    logger.debug(f"Downloading workflow from {download_url}")
     ga_workflow = extract_galaxy_workflow_from_zip(download_url)
     return ga_workflow
 
@@ -121,6 +140,7 @@ def iter_workflows():
             workflow_info = ga_workflow.parse_workflow(ga_w)
             workflow_info.url = wf["url"]
             workflow_info.description = wf.get("description", "")
+            workflow_info.version = get_latest_workflow_version_name(wf)
             yield workflow_info
         except Exception as e:
             logger.error(f"Error processing workflow {wf}: {e}")

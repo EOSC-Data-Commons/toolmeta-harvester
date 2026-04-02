@@ -11,10 +11,11 @@ class WorkflowInfo:
     url: str
     version: str
     tags: list = []
-    inputs: list = []
-    outputs: list = []
+    keywords: list = []
+    license: str = ""
     input_formats: list = []
     output_formats: list = []
+    input_slots: list = []
     input_tools: list = []
     output_tools: list = []
     steps: list = []
@@ -38,8 +39,40 @@ def is_shed_uri(tool_id: str) -> bool:
         return False
     return tool_id.startswith("toolshed.")
 
+def get_nodes_connected_to_node(ga, node):
+    steps = ga.get("steps", {})
+    connected_nodes = []
+    for step_id, step in steps.items():
+        input_connections = step.get("input_connections", {})
+        for input_name, connection in input_connections.items():
+            if isinstance(connection, list):
+                for c in connection:
+                    conn_id = str(c["id"])
+                    if conn_id == node["step_id"]:
+                        connected_nodes.append(step)
+            else:
+                conn_id = str(connection["id"])
+                if conn_id == node["step_id"]:
+                    connected_nodes.append(step)
+    return connected_nodes
+
 
 def get_tools_connected_to_inputs(ga):
+    inputs = get_inputs(ga)
+    results = []
+    for input in inputs:
+        input_tools = []
+        connected_nodes = get_nodes_connected_to_node(ga, input)
+        logger.debug(f"Connected nodes for input {input['name']} (step_id: {input['step_id']}): {connected_nodes}")
+        for node in connected_nodes:
+            if node.get("type") == "tool":
+                tool_id = node.get("tool_id") or node.get("content_id")
+                input_tools.append(tool_id)
+        results.append( ( input, input_tools ) )
+    return results
+
+# Deprecated
+def _get_tools_connected_to_inputs(ga):
     inputs = get_inputs(ga)
     input_step_ids = [inp["step_id"] for inp in inputs]
     steps = ga.get("steps", {})
@@ -145,6 +178,35 @@ def get_inputs(ga):
 
 
 def get_shed_inputs(ga):
+    inputs_and_tools = get_tools_connected_to_inputs(ga)
+    results = []
+    for input, tool_ids in inputs_and_tools:
+        # seen = set()
+        input_tools = []
+        for tool_id in tool_ids:
+            if not is_shed_uri(tool_id):
+                logger.debug(f"Input tool_id not from ToolShed: {
+                            tool_id}, skipping...")
+                continue
+            tool_uri = tool_id
+            # if tool_uri in seen:
+                # continue
+            try:
+                tool = shed.fetch_toolshed_tool(tool_uri)
+                if tool:
+                    input_tools.append(tool)
+                    # seen.add(tool_uri)
+                    logger.debug(f"Added input tool: {tool}")
+                    continue
+            except Exception:
+                logger.warning(f"Error retrieving input shed tool: {
+                                tool_uri}, skipping...")
+                continue
+        results.append( (input, input_tools) )
+    return results
+
+# Deprecated
+def _get_shed_inputs(ga):
     input_tool_ids = get_tools_connected_to_inputs(ga)
     input_tools = []
     seen = set()
@@ -179,16 +241,47 @@ def parse_workflow(ga) -> WorkflowInfo:
     wf_info.raw_ga = ga
     wf_info.description = ga.get("description", "")
     wf_info.toolshed_tools = get_step_shed_tools(ga)
-
+    
     input_tools = get_shed_inputs(ga)
-    wf_info.input_tools = input_tools
-    input_formats = set()
-    for tool in input_tools:
-        for input in tool.inputs:
-            wf_info.inputs.append(input)
-        formats = shed.extract_formats_from_tool(tool)
-        input_formats.update(formats)
-    wf_info.input_formats = list(input_formats)
+    # input_list = set()
+    input_slots = []
+    all_input_formats = set()
+
+    seen = set()
+    for input_node, tools in input_tools:
+        if input_node.get("step_id") in seen:
+            continue
+        input_formats = set()
+
+        for tool in tools:
+            formats = shed.extract_formats_from_tool(tool)
+            logger.info(f"Extracted formats from tool {tool.id}: {formats}")
+            input_formats.update(formats)
+
+        input_slot = {
+            "id": input_node.get("step_id"),
+            "name": input_node.get("label").lower(),
+            "type": input_node.get("data_type", "").lower(),
+            "description": input_node.get("description", "").lower(),
+            "file_formats": list(input_formats),
+        }
+        all_input_formats.update(input_formats)
+        input_slots.append(input_slot)
+        seen.add(input_node.get("step_id"))
+
+    wf_info.input_formats = list(all_input_formats)
+    wf_info.input_slots = input_slots
+    # wf_info.inputs = list(input_list)
+
+    # input_tools = get_shed_inputs(ga)
+    # wf_info.input_tools = input_tools
+    # input_formats = set()
+    # for tool in input_tools:
+    #     for input in tool.inputs:
+    #         wf_info.inputs.append(input)
+    #     formats = shed.extract_formats_from_tool(tool)
+    #     input_formats.update(formats)
+    # wf_info.input_formats = list(input_formats)
 
     # # The inputs in the DAG are usually stubs that link to nodes with actual tools
     # input_steps = get_inputs(ga)
@@ -202,8 +295,8 @@ def parse_workflow(ga) -> WorkflowInfo:
     wf_info.output_tools = output_tools
     output_formats = set()
     for tool in output_tools:
-        for output in tool.outputs:
-            wf_info.outputs.append(output)
+        # for output in tool.outputs:
+        #     wf_info.outputs.append(output)
         formats = shed.extract_formats_from_tool(tool)
         output_formats.update(formats)
     wf_info.output_formats = list(output_formats)

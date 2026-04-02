@@ -8,7 +8,7 @@ LOG_FILE = Path("logs/harvest_galaxy_hub_workflows.log")
 LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
 
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format="%(asctime)s %(name)s %(levelname)s: %(message)s",
     handlers=[logging.StreamHandler(),
               logging.FileHandler(LOG_FILE)],
@@ -72,8 +72,9 @@ def _test_pipeline_harvest_workflow_hub(no_of_workflows: int = 10):
         # logger.info(f"Description: {workflow_info.description}")
         logger.info(f"Tags: {', '.join(workflow_info.tags)}")
         logger.info(f"URL: {workflow_info.url}")
-        logger.info(f"Input data types: {len(workflow_info.inputs)}")
-        logger.info(f"Output data types: {len(workflow_info.outputs)}")
+        logger.info(f"Input slots: {workflow_info.input_slots}")
+        logger.info(f"Input formats: {workflow_info.input_formats}")
+        logger.info(f"Output formats: {workflow_info.output_formats}")
         logger.debug(f"Toolshed tools used: {
                     len(workflow_info.toolshed_tools)}")
         logger.debug(workflow_info.toolshed_tools)
@@ -96,7 +97,7 @@ def _test_pipeline_harvest_workflow_hub(no_of_workflows: int = 10):
 def main():
     logger.info("Starting Galaxy Hub workflow harvesting process.")
     # pipeline_harvest_workflow_hub(5)
-    _test_pipeline_harvest_workflow_hub(1)
+    _test_pipeline_harvest_workflow_hub(2)
 
 
 if __name__ == "__main__":

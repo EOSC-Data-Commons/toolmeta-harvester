@@ -28,9 +28,8 @@ install: check-secrets postgres-up sync
 
 .PHONY: clean
 clean:
-	uv clean
-	rm uv.lock
-	rm -rf .venv/lib/python3.12/site-packages/toolmeta_models/
+	rm -rf .venv uv.lock
+	uv cache clean
 
 .PHONY: sync
 sync:

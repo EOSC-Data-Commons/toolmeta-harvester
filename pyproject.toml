@@ -1,6 +1,6 @@
 [project]
 name = "toolmeta_harvester"
-version = "0.1.0-dev"
+version = "0.2.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -16,5 +16,9 @@ dependencies = [
     "requests-cache>=1.2.1",
     "sqlalchemy>=2.0.45",
     "sqlalchemy-utils>=0.42.1",
-    "toolmeta-models @ git+https://github.com/EOSC-Data-Commons/toolmeta-models.git@v0.2.0",
+    # "toolmeta-models @ git+https://github.com/EOSC-Data-Commons/toolmeta-models.git@v0.2.1",
+    "toolmeta-models",
 ]
+
+[tool.uv.sources]
+toolmeta-models = { git = "https://github.com/EOSC-Data-Commons/toolmeta-models.git", rev = "v0.2.1" }

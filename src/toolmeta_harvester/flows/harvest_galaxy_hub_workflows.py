@@ -75,6 +75,10 @@ def _test_pipeline_harvest_workflow_hub(no_of_workflows: int = 10):
         logger.info(f"Input slots: {workflow_info.input_slots}")
         logger.info(f"Input formats: {workflow_info.input_formats}")
         logger.info(f"Output formats: {workflow_info.output_formats}")
+        logger.info(f"License: {workflow_info.license}")
+        logger.info(f"Tags: {', '.join(workflow_info.tags)}")
+        logger.info(f"Raw metadata keys: {', '.join(workflow_info.raw_metadata.keys())}")
+
         logger.debug(f"Toolshed tools used: {
                     len(workflow_info.toolshed_tools)}")
         logger.debug(workflow_info.toolshed_tools)

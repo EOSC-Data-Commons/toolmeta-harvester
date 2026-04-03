@@ -20,6 +20,8 @@ class WorkflowInfo:
     output_tools: list = []
     steps: list = []
     toolshed_tools: list = []
+    raw_ga: dict = {}
+    raw_metadata: dict = {}
 
 
 def get_step_shed_tools(ga):

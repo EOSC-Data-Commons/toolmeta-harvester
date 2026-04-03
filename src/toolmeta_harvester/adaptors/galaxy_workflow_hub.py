@@ -83,6 +83,13 @@ def extract_galaxy_workflow_from_zip(url):
         with zf.open(ga_name) as ga_file:
             return json.load(ga_file)
 
+# Pull json from URL and return as dict
+def fetch_workflowhub_json(url):
+    jurl = f"{url}.json"
+    r = requests.get(jurl, timeout=30, headers=HEADERS)
+    r.raise_for_status()
+    return r.json()
+
 
 # Get latest version of a workflow from Workflow Hub
 def get_latest_workflow_version(w):
@@ -130,6 +137,14 @@ def get_ga_workflow(w):
     ga_workflow = extract_galaxy_workflow_from_zip(download_url)
     return ga_workflow
 
+def get_json_path(d, path):
+
+    for key in path.split("."):
+        if isinstance(d, dict) and key in d:
+            d = d[key]
+        else:
+            return None
+    return d
 
 # Iterate over Galaxy workflows in the Workflow Hub
 def iter_workflows():
@@ -141,7 +156,15 @@ def iter_workflows():
             workflow_info.url = wf["url"]
             workflow_info.description = wf.get("description", "")
             workflow_info.version = get_latest_workflow_version_name(wf)
+            wf_json = fetch_workflowhub_json(wf["url"]) 
+            tags = get_json_path(wf_json, "data.attributes.tags")
+            license = get_json_path(wf_json, "data.attributes.license")
+            workflow_info.tags = tags if tags else []
+            workflow_info.tags.append("workflowhub")
+            workflow_info.license = license if license else ""
+            workflow_info.raw_metadata = wf_json
             yield workflow_info
+
         except Exception as e:
             logger.error(f"Error processing workflow {wf}: {e}")
             continue

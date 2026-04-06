@@ -118,8 +118,8 @@ def process_single_repository(repo_url, session):
 def get_db_session():
     return Session(engine)
 
-
-def get_input_formats(wf):
+# Deprecated
+def _get_input_formats(wf):
     results = set()    
     for tool in wf.input_tools:
         for input in tool.inputs:
@@ -129,7 +129,8 @@ def get_input_formats(wf):
                 results.add(fmt.strip())
     return list(results)
 
-def get_output_formats(wf):
+# Deprecated
+def _get_output_formats(wf):
     results = set()    
     for tool in wf.output_tools:
         for output in tool.outputs:
@@ -160,15 +161,15 @@ def add_workflow_to_generic_table(wf, session):
             tags=wf.tags,
             keywords=wf.keywords,
             license=wf.license,
-            input_file_formats=get_input_formats(wf),
-            output_file_formats=get_output_formats(wf),
+            input_file_formats=wf.input_formats,
+            output_file_formats=wf.output_formats,
             input_slots=wf.input_slots,
             output_slots=wf.output_slots,
             location=wf.url,
             raw_definition=wf.raw_ga,
             raw_metadata=wf.raw_metadata,
             metadata_schema={},
-            metadata_type="a_galaxy_workflow",
+            metadata_type="workflowhub",
             # metadata_version=wf.raw_ga.get("format-version", "unknown"),
             metadata_version=wf.raw_metadata.get("jsonapi", {}).get("version", "unknown"),
             created_by="harvester",

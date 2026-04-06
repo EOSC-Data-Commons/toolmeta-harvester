@@ -7,6 +7,7 @@ TOOL_REGISTRY_GITHUB__API_KEY=your_github_api_key
 POSTGRES_CONTAINER=tool-registry-postgres
 POSTGRES_VOLUME=tool_registry_pgdata
 TOOLS_CONTAINER=ghcr.io/eosc-data-commons/tool-registry:latest
+TIMESTAMP := $(shell date +"%Y-%m-%d")
 
 check-secrets:
 	@test -f config/.secrets.toml || (echo "WARNING Missing config/.secrets.toml; github token might not be defined"; exit 0)
@@ -28,9 +29,8 @@ install: check-secrets postgres-up sync
 
 .PHONY: clean
 clean:
-	uv clean
-	rm uv.lock
-	rm -rf .venv/lib/python3.12/site-packages/toolmeta_models/
+	rm -rf .venv uv.lock
+	uv cache clean
 
 .PHONY: sync
 sync:
@@ -39,11 +39,11 @@ sync:
 
 postgres-dump:
 	@echo "Dumping 'tool_generic' table from Postgres container '$(POSTGRES_CONTAINER)' to 'tool_generic.sql'..."
-	docker exec  $(POSTGRES_CONTAINER) pg_dump -U $(TOOL_REGISTRY_DATABASE__USER) -d $(TOOL_REGISTRY_DATABASE__NAME) -t tool_generic --no-owner --no-privileges -Fc > tool_generic.dump
+	docker exec  $(POSTGRES_CONTAINER) pg_dump -U $(TOOL_REGISTRY_DATABASE__USER) -d $(TOOL_REGISTRY_DATABASE__NAME) -t tool_generic --no-owner --no-privileges -Fc > tool_generic_$(TIMESTAMP).dump
 
 postgres-restore:
 	@echo "Restoring 'tool_generic' table to Postgres container '$(POSTGRES_CONTAINER)' from 'tool_generic.sql'..."
-	docker exec -i $(POSTGRES_CONTAINER) pg_restore -U $(TOOL_REGISTRY_DATABASE__USER) -d $(TOOL_REGISTRY_DATABASE__NAME) < tool_generic.dump
+	docker exec -i $(POSTGRES_CONTAINER) pg_restore -U $(TOOL_REGISTRY_DATABASE__USER) -d $(TOOL_REGISTRY_DATABASE__NAME) < $(shell ls -t backups/tool_generic_*.dump | head -n 1)
 
 .PHONY: postgres-up postgres-down postgres-logs postgres-reset
 postgres-up:

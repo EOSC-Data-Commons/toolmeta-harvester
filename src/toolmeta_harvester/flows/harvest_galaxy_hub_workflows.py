@@ -34,8 +34,16 @@ def pipeline_harvest_workflow_hub(no_of_workflows: int = 10):
         # logger.info(f"Description: {workflow_info.description}")
         logger.info(f"Tags: {', '.join(workflow_info.tags)}")
         logger.info(f"URL: {workflow_info.url}")
-        logger.info(f"Input data types: {len(workflow_info.inputs)}")
-        logger.info(f"Output data types: {len(workflow_info.outputs)}")
+        # logger.info(f"Input data types: {len(workflow_info.inputs)}")
+        # logger.info(f"Output data types: {len(workflow_info.outputs)}")
+        logger.info(f"Input slots: {workflow_info.input_slots}")
+        logger.info(f"Input slots: {workflow_info.output_slots}")
+        logger.info(f"Input formats: {workflow_info.input_formats}")
+        logger.info(f"Output formats: {workflow_info.output_formats}")
+        logger.info(f"License: {workflow_info.license}")
+        logger.info(f"Tags: {', '.join(workflow_info.tags)}")
+        logger.info(f"Raw definition keys: {', '.join(workflow_info.raw_ga.keys())}")
+        logger.info(f"Raw metadata keys: {', '.join(workflow_info.raw_metadata.keys())}")
         logger.debug(f"Toolshed tools used: {
                     len(workflow_info.toolshed_tools)}")
         logger.debug(workflow_info.toolshed_tools)
@@ -57,7 +65,7 @@ def pipeline_harvest_workflow_hub(no_of_workflows: int = 10):
 
 def main():
     logger.info("Starting Galaxy Hub workflow harvesting process.")
-    pipeline_harvest_workflow_hub(5)
+    pipeline_harvest_workflow_hub(-1)
 
 
 if __name__ == "__main__":

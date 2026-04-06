@@ -16,6 +16,7 @@ class WorkflowInfo:
     input_formats: list = []
     output_formats: list = []
     input_slots: list = []
+    output_slots: list = []
     input_tools: list = []
     output_tools: list = []
     steps: list = []
@@ -129,6 +130,30 @@ def get_outputs(ga):
                 }
             )
     return outputs
+
+
+def get_workflow_outputs(ga):
+    results = []
+    steps = ga.get("steps", {})
+    for step_id, step in steps.items():
+        logger.debug(f"Processing step {step_id} for workflow outputs")
+        # Check if workflow_outputs exists
+        workflow_outputs = step.get("workflow_outputs", [])
+        if workflow_outputs:
+            for output in workflow_outputs:
+                label = output.get("label")
+                if not label:
+                    logger.warning(f"Output in step {step_id} missing label, skipping...")
+                    continue
+                results.append(
+                    {
+                        "step_id": step_id,
+                        "name": output.get("output_name", ""),
+                        "label": output.get("label", ""),
+                        "description": output.get("description", ""),
+                    }
+                )
+    return results
 
 
 def get_shed_outputs(ga):
@@ -257,14 +282,14 @@ def parse_workflow(ga) -> WorkflowInfo:
 
         for tool in tools:
             formats = shed.extract_formats_from_tool(tool)
-            logger.info(f"Extracted formats from tool {tool.id}: {formats}")
+            logger.debug(f"Extracted formats from tool {tool.id}: {formats}")
             input_formats.update(formats)
 
         input_slot = {
             "id": input_node.get("step_id"),
-            "name": input_node.get("label").lower(),
-            "type": input_node.get("data_type", "").lower(),
-            "description": input_node.get("description", "").lower(),
+            "name": (input_node.get("label") or "").lower(),
+            "type": (input_node.get("data_type") or "").lower(),
+            "description": (input_node.get("description") or "").lower(),
             "file_formats": list(input_formats),
         }
         all_input_formats.update(input_formats)
@@ -273,6 +298,22 @@ def parse_workflow(ga) -> WorkflowInfo:
 
     wf_info.input_formats = list(all_input_formats)
     wf_info.input_slots = input_slots
+
+    output_slots = []
+    workflow_outputs = get_workflow_outputs(ga)
+    for i, output in enumerate(workflow_outputs):
+        logger.debug(f"Processing workflow output {i}: {output}")
+        output_slot = {
+            "id": i,
+            "name": (output.get("label") or "").lower(),
+            "type": "file",
+            "description": (output.get("description") or "").lower(),
+            "file_formats": []  # We can fill this in later based on the output tools
+        }
+        output_slots.append(output_slot)
+
+    wf_info.output_slots = output_slots
+
     # wf_info.inputs = list(input_list)
 
     # input_tools = get_shed_inputs(ga)

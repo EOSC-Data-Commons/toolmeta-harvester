@@ -37,6 +37,7 @@ def pipeline_harvest_workflow_hub(no_of_workflows: int = 10):
         # logger.info(f"Input data types: {len(workflow_info.inputs)}")
         # logger.info(f"Output data types: {len(workflow_info.outputs)}")
         logger.info(f"Input slots: {workflow_info.input_slots}")
+        logger.info(f"Input slots: {workflow_info.output_slots}")
         logger.info(f"Input formats: {workflow_info.input_formats}")
         logger.info(f"Output formats: {workflow_info.output_formats}")
         logger.info(f"License: {workflow_info.license}")
@@ -64,7 +65,7 @@ def pipeline_harvest_workflow_hub(no_of_workflows: int = 10):
 
 def main():
     logger.info("Starting Galaxy Hub workflow harvesting process.")
-    pipeline_harvest_workflow_hub(2)
+    pipeline_harvest_workflow_hub(-1)
 
 
 if __name__ == "__main__":

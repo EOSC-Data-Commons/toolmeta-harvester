@@ -931,13 +931,13 @@ requires-dist = [
     { name = "requests-cache", specifier = ">=1.2.1" },
     { name = "sqlalchemy", specifier = ">=2.0.45" },
     { name = "sqlalchemy-utils", specifier = ">=0.42.1" },
-    { name = "toolmeta-models", git = "https://github.com/EOSC-Data-Commons/toolmeta-models.git?rev=v0.2.1" },
+    { name = "toolmeta-models", git = "https://github.com/EOSC-Data-Commons/toolmeta-models.git?rev=v0.2.3" },
 ]
 
 [[package]]
 name = "toolmeta-models"
-version = "0.2.1"
-source = { git = "https://github.com/EOSC-Data-Commons/toolmeta-models.git?rev=v0.2.1#5ba1de1d6ad198f1ec7ee6daac43c95686e0bc3c" }
+version = "0.2.3"
+source = { git = "https://github.com/EOSC-Data-Commons/toolmeta-models.git?rev=v0.2.3#2668d75a1201025a564909baaba8da98c0c79ca2" }
 dependencies = [
     { name = "pgvector" },
     { name = "pydantic" },

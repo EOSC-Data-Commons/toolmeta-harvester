@@ -62,6 +62,11 @@ def pipeline_harvest_workflow_hub(no_of_workflows: int = 10):
                 } workflows from Galaxy Workflow Hub. Stopping harvest."
             )
             break
+    logger.info(
+        f"Harvested {
+            number_of_wf_to_harvest
+        } workflows from Galaxy Workflow Hub. Harvesting process completed."
+    )
 
 def main():
     logger.info("Starting Galaxy Hub workflow harvesting process.")

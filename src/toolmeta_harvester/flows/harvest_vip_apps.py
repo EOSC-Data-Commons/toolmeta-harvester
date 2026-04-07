@@ -23,6 +23,24 @@ API_URL = "https://tool-registry.eosc-data-commons.dansdemo.nl/api/v1/tools/"
 TOKEN = config.egi_token()
 
 def harvest_vip():
+    session = vip.get_db_session()
+    vip.ensure_repo()
+    apps = vip.get_app_metadata()
+    logger.info(f"Harvested {len(apps)} VIP apps")
+    for (name, version), tool in apps.items():
+        logger.info(f"App: {name}, Version: {version}, URI: {tool['uri']}")
+        logger.info(f"Input slots: {tool.get('input_slots', [])}")
+        tool_from_db = vip.add_json_to_db(tool, session)
+        if tool_from_db:
+            logger.info(f"Added {name} version {version} to database with ID {tool_from_db.id}")
+        # response = vip.post_json_to_registry(tool, API_URL, TOKEN)
+        # if response.get("success"):
+        #     logger.info(f"Successfully posted {name} version {version} to registry")
+        #     logger.debug(f"Response: {response}")
+        # else:
+        #     logger.error(f"Failed to post {name} version {version} to registry: {response.get('error')}")
+
+def _harvest_vip():
     vip.ensure_repo()
     apps = vip.get_app_metadata()
     logger.info(f"Harvested {len(apps)} VIP apps")
@@ -35,21 +53,6 @@ def harvest_vip():
         else:
             logger.error(f"Failed to post {name} version {version} to registry: {response.get('error')}")
 
-def patch_uris():
-    tools = vip.get_tools(API_URL)
-    for tool in tools:
-        if tool and tool["archetype"] == "vip_app_boutique":
-            uri = tool.get("uri", "")
-            uri = uri.replace("\n", "")
-            # logger.debug(f"New URI for tool {tool['name']} v{tool['version']}: {uri}")
-            patch_data = {"uri": uri,
-                          "location": uri}
-            response = vip.patch_tool(tool["id"], patch_data, API_URL, TOKEN)
-            if response.get("success"):
-                logger.info(f"Successfully patched {tool['id']}")
-                logger.debug(f"Response: {response}")
-            else:
-                logger.error(f"Failed to patch {tool['id']}: {response.get('error')}")
 
 if __name__ == "__main__":
     # patch_uris()

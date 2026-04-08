@@ -2,19 +2,20 @@ import logging
 import json
 import requests
 import subprocess
-# import requests_cache
 from pathlib import Path
+from toolmeta_models import ToolGeneric
+from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy import select
+from toolmeta_harvester.db.engine import engine
+import toolmeta_harvester.db.science_file_types as sft
 
 logger = logging.getLogger(__name__)
 
 VIP_INDEX_URL = "https://vip.creatis.insa-lyon.fr/rest/pipelines?public"
+BASE_URI = "https://vip.creatis.insa-lyon.fr/rest/pipelines/"
 REPO_URL ="https://github.com/virtual-imaging-platform/vip-apps-boutiques-descriptors"
 LOCAL_DIR = Path("cache/vip-apps-boutiques-descriptors")
-
-# Initialize requests cache
-# requests_cache.install_cache(
-#     "cache/vip_cache", backend="sqlite", expire_after=86400
-# )
 
 def get_vip_index():
     try:
@@ -70,6 +71,35 @@ def process_json_file(path):
     except Exception as e:
         logger.warning(f"Failed to read {path}: {e}")
 
+def get_inputs(data):
+    inputs = data.get("inputs", [])
+    results = []
+    for input in inputs:
+        slot = {
+            "id": input.get("id", ""),
+            "name": input.get("name", ""),
+            "description": input.get("description", ""),
+            "type": (input.get("type") or "").lower(),
+            "file_formats": []
+        }
+        if input.get("type") == "File":
+            slot["file_formats"] = sft.extract_filetypes(input.get("description", ""))
+        results.append(slot)
+    return results
+
+def get_outputs(data):
+    outputs = data.get("output-files", [])
+    results = []
+    for output in outputs:
+        results.append({
+                        "id": output.get("id", ""),
+                        "name": output.get("name", ""),
+                        "description": output.get("description", ""),
+                        "type": (output.get("type") or "").lower(),
+                        "file_formats": [],
+                        })
+    return results
+
 
 def get_app_metadata():
     results = {}
@@ -104,16 +134,19 @@ def get_app_metadata():
                 if name in app_names:
                     logger.debug(f"App '{name}' found in VIP index.")
                     tool = {
-                        "uri": location,
+                        "uri": f"{BASE_URI}{name}/{version}",
                         "name": name,
                         "version": version,
                         "location": location,
-                        "archetype": "vip_app_boutique",
+                        "types": ["boutique", "vip"],
                         "description": data.get("description", ""),
                         "input_file_formats": [],
                         "output_file_formats": [],
                         "input_file_descriptions": get_input_descriptions(data),
                         "output_file_descriptions": get_output_descriptions(data),
+                        "input_slots": get_inputs(data),
+                        "output_slots": get_outputs(data),
+                        "raw_definition": data,
                         "raw_metadata": data,
                         "metadata_version": data.get("schema-version", ""),
                         "metadata_schema": {},
@@ -191,6 +224,60 @@ def patch_tool(id, data, api_url, token, timeout=10):
             "success": False,
             "error": str(e)
         }
+
+def get_db_session():
+    return Session(engine)
+
+def add_json_to_db(tool, session=None):
+    if not session:
+        session = Session(engine)
+    try:
+        existing = session.execute(
+            select(ToolGeneric).where(ToolGeneric.uri == tool["uri"])
+        ).scalar_one_or_none()
+
+        if existing:
+            logger.info(f"VIP tool with URI {tool["uri"]} already exists in generic table. Skipping insert.")
+            return existing  # Already in DB → return it
+
+        vip_generic = ToolGeneric(
+            uri=tool.get("uri", ""),
+            name=tool.get("name", ""),
+            location=tool.get("location", ""),
+            description=tool.get("description", ""),
+            version=tool.get("version", ""),
+            types=tool.get("types", []),
+            tags=tool.get("tags", []),
+            keywords=tool.get("keywords", []),
+            license=tool.get("license", ""),
+            # input_file_formats=tool.input_formats,
+            # output_file_formats=tool.output_formats,
+            input_file_descriptions=tool.get("input_file_descriptions", []),
+            output_file_descriptions=tool.get("output_file_descriptions", []),
+            input_slots=tool.get("input_slots", []),
+            output_slots=tool.get("output_slots", []),
+            raw_definition=tool.get("raw_definition", {}),
+            # raw_metadata=tool.raw_metadata,
+            # metadata_schema={},
+            # metadata_type="boutique_descriptor",
+            # # metadata_version=tool.raw_ga.get("format-version", "unknown"),
+            # metadata_version=tool.raw_metadata.get("jsonapi", {}).get("version", "unknown"),
+            created_by="harvester",
+        )
+        session.add(vip_generic)
+        session.commit()
+        session.flush()
+        logger.info(f"Added VIP tool {tool["uri"]} to generic table with ID {vip_generic.id}")
+        return vip_generic
+    except IntegrityError as e:
+        logger.warning(f"IntegrityError for workflow tool {tool["uri"]}: {e}")
+        session.rollback()
+        return None
+    except Exception as e:
+        logger.error(f"Error adding workflow {tool["uri"]} to generic table: {e}")
+        session.rollback()
+        raise 
+
 
 def post_json_to_registry(data, api_url, token=None, timeout=10):
     headers = {

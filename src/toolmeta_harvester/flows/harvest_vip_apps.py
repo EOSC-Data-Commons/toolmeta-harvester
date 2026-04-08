@@ -17,43 +17,43 @@ logger = logging.getLogger(__name__)
 
 # Important: Ensure ending forward slash in API_URL for correct endpoint construction in post_json_to_registry
 # Development API URL
-API_URL = "https://tool-registry.eosc-data-commons.dansdemo.nl/api/v1/tools/"
+API_URL = "http://tool-registry.eosc-data-commons.dansdemo.nl/api/v1/tools/"
 # Production API URL
 # API_URL = "https://dev.tools-registry.eosc-data-commons.eu/api/v1/tools/"
 TOKEN = config.egi_token()
 
-def harvest_vip():
+def harvest_vip_using_postgres_backend():
     session = vip.get_db_session()
     vip.ensure_repo()
     apps = vip.get_app_metadata()
     logger.info(f"Harvested {len(apps)} VIP apps")
+    counter = 0
     for (name, version), tool in apps.items():
         logger.info(f"App: {name}, Version: {version}, URI: {tool['uri']}")
         logger.info(f"Input slots: {tool.get('input_slots', [])}")
         tool_from_db = vip.add_json_to_db(tool, session)
-        if tool_from_db:
-            logger.info(f"Added {name} version {version} to database with ID {tool_from_db.id}")
-        # response = vip.post_json_to_registry(tool, API_URL, TOKEN)
-        # if response.get("success"):
-        #     logger.info(f"Successfully posted {name} version {version} to registry")
-        #     logger.debug(f"Response: {response}")
-        # else:
-        #     logger.error(f"Failed to post {name} version {version} to registry: {response.get('error')}")
+        if not tool_from_db:
+            logger.error(f"Failed to add {name} version {version} to database")
+            continue
+        counter += 1
+    logger.info(f"Successfully added {counter} VIP apps to the database")
 
-def _harvest_vip():
+def harvest_vip_using_tool_registry_rest_api():
     vip.ensure_repo()
     apps = vip.get_app_metadata()
     logger.info(f"Harvested {len(apps)} VIP apps")
+    counter = 0
     for (name, version), tool in apps.items():
         logger.debug(f"App: {name}, Version: {version}, Location: {tool['location']}")
         response = vip.post_json_to_registry(tool, API_URL, TOKEN)
         if response.get("success"):
             logger.info(f"Successfully posted {name} version {version} to registry")
             logger.debug(f"Response: {response}")
+            counter += 1
         else:
             logger.error(f"Failed to post {name} version {version} to registry: {response.get('error')}")
+    logger.info(f"Successfully posted {counter} VIP apps to the registry")
 
 
 if __name__ == "__main__":
-    # patch_uris()
-    harvest_vip()
+    harvest_vip_using_postgres_backend()

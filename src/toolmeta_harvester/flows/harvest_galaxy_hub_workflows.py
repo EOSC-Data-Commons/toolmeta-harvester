@@ -1,5 +1,6 @@
 import logging
 from pathlib import Path
+from toolmeta_harvester.config import load_git_config
 from toolmeta_harvester.tasks import galaxy_harvest_tasks as ght
 from toolmeta_harvester.tasks import galaxy_workflow_hub as gwh
 
@@ -69,6 +70,10 @@ def pipeline_harvest_workflow_hub(no_of_workflows: int = 10):
     )
 
 def main():
+    git_config = load_git_config()
+    if not git_config.api_key:
+        logger.error("GitHub API key not found in configuration. Please set it up before running the harvester.")
+        return
     logger.info("Starting Galaxy Hub workflow harvesting process.")
     pipeline_harvest_workflow_hub(-1)
 

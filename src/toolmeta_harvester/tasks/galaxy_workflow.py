@@ -1,5 +1,5 @@
 import logging
-from toolmeta_harvester.adaptors import galaxy_toolshed as shed
+from toolmeta_harvester.tasks import galaxy_toolshed as shed
 
 logger = logging.getLogger(__name__)
 
@@ -11,6 +11,7 @@ class WorkflowInfo:
     url: str
     version: str
     tags: list = []
+    types: list = ["galaxy_workflow"]
     keywords: list = []
     license: str = ""
     input_formats: list = []
@@ -23,6 +24,9 @@ class WorkflowInfo:
     toolshed_tools: list = []
     raw_ga: dict = {}
     raw_metadata: dict = {}
+    metadata_schema: dict = {}
+    metadata_type: str = ""
+    metadata_version: str = ""
 
 
 def get_step_shed_tools(ga):

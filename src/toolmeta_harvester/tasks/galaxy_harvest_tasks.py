@@ -15,8 +15,7 @@ from toolmeta_models import (
     ToolGeneric,
 )
 
-from toolmeta_harvester.adaptors import galaxy_toolshed
-from requests.exceptions import HTTPError
+from toolmeta_harvester.tasks import galaxy_toolshed
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select
@@ -157,7 +156,8 @@ def add_workflow_to_generic_table(wf, session):
             name=wf.name,
             description=wf.description,
             version=wf.version,
-            types=["galaxy_workflow", "workflowhub"],
+            # types=["galaxy_workflow", "workflowhub"],
+            types=wf.types,
             tags=wf.tags,
             keywords=wf.keywords,
             license=wf.license,
@@ -168,10 +168,13 @@ def add_workflow_to_generic_table(wf, session):
             location=wf.url,
             raw_definition=wf.raw_ga,
             raw_metadata=wf.raw_metadata,
-            metadata_schema={},
-            metadata_type="workflowhub",
+            metadata_schema=wf.metadata_schema,
+            metadata_type=wf.metadata_type,
+            metadata_version=wf.metadata_version,
+
+            # metadata_type="workflowhub",
             # metadata_version=wf.raw_ga.get("format-version", "unknown"),
-            metadata_version=wf.raw_metadata.get("jsonapi", {}).get("version", "unknown"),
+            # metadata_version=wf.raw_metadata.get("jsonapi", {}).get("version", "unknown"),
             created_by="harvester",
         )
         session.add(wf_generic)

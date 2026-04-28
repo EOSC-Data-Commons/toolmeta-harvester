@@ -1,9 +1,10 @@
+
 import logging
 from pathlib import Path
 from toolmeta_harvester.tasks import galaxy_harvest_tasks as ght
-from toolmeta_harvester.tasks import galaxy_workflow_hub as gwh
+from toolmeta_harvester.tasks import galaxy_usegalaxy_instance as galaxy_instance
 
-LOG_FILE = Path("logs/harvest_galaxy_hub_workflows.log")
+LOG_FILE = Path("logs/harvest_usegalaxy_eu.log")
 # Create directory if it does not exist
 LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
 
@@ -16,18 +17,22 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+GALAXY_INSTANCE_URL = "https://usegalaxy.eu/"
 
-def pipeline_harvest_workflow_hub(no_of_workflows: int = 10):
+
+def pipeline_harvest_workflows(no_of_workflows: int = 10):
     # Step 1: Initialize DB
     ght.create_tables()
     session = ght.get_db_session()
     logger.info("Database tables created.")
 
-    # Step 2: Crawl Galaxy Workflow Hub
-    # Get first n workflows from Galaxy Workflow Hub
+    # Step 2: Crawl Galaxy Instance
+    galaxy_instance.set_galaxy_api_url(GALAXY_INSTANCE_URL)
+
+    # Get first n workflows from Galaxy Instance
     number_of_wf_to_harvest = 0
-    # Iterate through Galaxy Workflow Hub workflows and print their metadata
-    for workflow_info in gwh.iter_workflows():
+    # Iterate through Galaxy Instance workflows and print their metadata
+    for workflow_info in galaxy_instance.iter_workflows():
         logger.info(f"Workflow UUID: {workflow_info.uuid}")
         logger.info(f"Name: {workflow_info.name}")
         logger.info(f"Version: {workflow_info.version}")
@@ -50,7 +55,7 @@ def pipeline_harvest_workflow_hub(no_of_workflows: int = 10):
         logger.info("-" * 40)
 
         # Step 3: Store Galaxy Workflow in DB
-        # ght.add_workflow_to_db(workflow_info, session)
+        ght.add_workflow_to_db(workflow_info, session)
         ght.add_workflow_to_generic_table(workflow_info, session)
         logger.info("Added workflow and tools to the database.")
 
@@ -59,18 +64,18 @@ def pipeline_harvest_workflow_hub(no_of_workflows: int = 10):
             logger.info(
                 f"Harvested {
                     number_of_wf_to_harvest
-                } workflows from Galaxy Workflow Hub. Stopping harvest."
+                } workflows from {GALAXY_INSTANCE_URL}. Stopping harvest."
             )
             break
     logger.info(
         f"Harvested {
             number_of_wf_to_harvest
-        } workflows from Galaxy Workflow Hub. Harvesting process completed."
+        } workflows from {GALAXY_INSTANCE_URL}. Harvesting process completed."
     )
 
 def main():
-    logger.info("Starting Galaxy Hub workflow harvesting process.")
-    pipeline_harvest_workflow_hub(-1)
+    logger.info(f"Starting Galaxy {GALAXY_INSTANCE_URL} workflow harvesting process.")
+    pipeline_harvest_workflows(-1)
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import zipfile
 import io
-from toolmeta_harvester.adaptors import galaxy_workflow as ga_workflow
+from toolmeta_harvester.tasks import galaxy_workflow as ga_workflow
 
 logger = logging.getLogger(__name__)
 
@@ -160,9 +160,12 @@ def iter_workflows():
             tags = get_json_path(wf_json, "data.attributes.tags")
             license = get_json_path(wf_json, "data.attributes.license")
             workflow_info.tags = tags if tags else []
-            workflow_info.tags.append("workflowhub")
+            workflow_info.types = ["galaxy_workflow", "workflowhub"]
             workflow_info.license = license if license else ""
+            workflow_info.raw_ga = ga_w
             workflow_info.raw_metadata = wf_json
+            workflow_info.metadata_type = "workflowhub"
+            workflow_info.metadata_version = wf_json.get("jsonapi", {}).get("version", "unknown")
             yield workflow_info
 
         except Exception as e:

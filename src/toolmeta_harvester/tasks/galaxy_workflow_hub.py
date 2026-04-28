@@ -165,6 +165,7 @@ def iter_workflows():
             workflow_info.raw_ga = ga_w
             workflow_info.raw_metadata = wf_json
             workflow_info.metadata_type = "workflowhub"
+            workflow_info.metadata_version = wf_json.get("jsonapi", {}).get("version", "unknown")
             yield workflow_info
 
         except Exception as e:

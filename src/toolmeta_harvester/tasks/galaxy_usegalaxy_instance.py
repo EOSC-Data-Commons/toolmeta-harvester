@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 GALAXY_API = None
 GALAXY_CACHE_FILE = None
 GALAXY_DOMAIN = None
+GALAXY_INSTANCE_URL = None
 
 HEADERS = {
     "Accept": "application/json",
@@ -23,6 +24,8 @@ def set_galaxy_api_url(url):
     global GALAXY_API
     global GALAXY_CACHE_FILE
     global GALAXY_DOMAIN
+    global GALAXY_INSTANCE_URL
+    GALAXY_INSTANCE_URL = url
     GALAXY_API = f"{url.rstrip('/')}/api"
     domain = urlparse(url).hostname
     GALAXY_CACHE_FILE = f"cache/{domain}_api_cache.json"
@@ -73,7 +76,7 @@ def iter_workflows():
             id = wf["id"]
             ga_w = get_ga_workflow(id)
             workflow_info = ga_workflow.parse_workflow(ga_w)
-            workflow_info.url = f"{GALAXY_API}{wf['url']}"
+            workflow_info.url = f"{GALAXY_INSTANCE_URL.rstrip('/')}{wf['url']}"
             workflow_info.description = ga_w.get("annotation", "")
             workflow_info.version = ga_w.get("version", "")
             tags = wf.get("tags", [])

@@ -5,7 +5,7 @@ from toolmeta_harvester.config import load_git_config
 from toolmeta_harvester.tasks import galaxy_harvest_tasks as ght
 from toolmeta_harvester.tasks import galaxy_usegalaxy_instance as galaxy_instance
 
-LOG_FILE = Path("logs/harvest_usegalaxy_eu.log")
+LOG_FILE = Path("logs/harvest_usegalaxy_org.log")
 # Create directory if it does not exist
 LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
 
@@ -18,7 +18,7 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-GALAXY_INSTANCE_URL = "https://usegalaxy.eu/"
+GALAXY_INSTANCE_URL = "https://usegalaxy.org/"
 
 
 def pipeline_harvest_workflows(no_of_workflows: int = 10):

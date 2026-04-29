@@ -1,9 +1,10 @@
+
 import logging
 from pathlib import Path
 from toolmeta_harvester.config import load_git_config
 from toolmeta_harvester.flows import harvest_usegalaxy_base as galaxy_base
 
-LOG_FILE = Path("logs/harvest_usegalaxy_eu.log")
+LOG_FILE = Path("logs/harvest_usegalaxy_fr.log")
 # Create directory if it does not exist
 LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
 
@@ -16,7 +17,7 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-GALAXY_INSTANCE_URL = "https://usegalaxy.eu/"
+GALAXY_INSTANCE_URL = "https://usegalaxy.fr"
 
 
 def main():

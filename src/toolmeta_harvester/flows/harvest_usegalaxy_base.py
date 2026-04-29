@@ -1,0 +1,57 @@
+import logging
+from toolmeta_harvester.tasks import galaxy_harvest_tasks as ght
+from toolmeta_harvester.tasks import galaxy_usegalaxy_instance as galaxy_instance
+
+logger = logging.getLogger(__name__)
+
+def pipeline_harvest_workflows(no_of_workflows: int = 10, galaxy_instance_url: str = None):
+    # Step 1: Initialize DB
+    ght.create_tables()
+    session = ght.get_db_session()
+    logger.info("Database tables created.")
+
+    # Step 2: Crawl Galaxy Instance
+    galaxy_instance.set_galaxy_api_url(galaxy_instance_url)
+
+    # Get first n workflows from Galaxy Instance
+    number_of_wf_to_harvest = 0
+    # Iterate through Galaxy Instance workflows and print their metadata
+    for workflow_info in galaxy_instance.iter_workflows():
+        logger.info(f"Workflow UUID: {workflow_info.uuid}")
+        logger.info(f"Name: {workflow_info.name}")
+        logger.info(f"Version: {workflow_info.version}")
+        # logger.info(f"Description: {workflow_info.description}")
+        logger.info(f"Tags: {', '.join(workflow_info.tags)}")
+        logger.info(f"URL: {workflow_info.url}")
+        # logger.info(f"Input data types: {len(workflow_info.inputs)}")
+        # logger.info(f"Output data types: {len(workflow_info.outputs)}")
+        logger.info(f"Input slots: {workflow_info.input_slots}")
+        logger.info(f"Input slots: {workflow_info.output_slots}")
+        logger.info(f"Input formats: {workflow_info.input_formats}")
+        logger.info(f"Output formats: {workflow_info.output_formats}")
+        logger.info(f"License: {workflow_info.license}")
+        logger.info(f"Tags: {', '.join(workflow_info.tags)}")
+        logger.info(f"Raw definition keys: {', '.join(workflow_info.raw_ga.keys())}")
+        logger.info(f"Raw metadata keys: {', '.join(workflow_info.raw_metadata.keys())}")
+        logger.debug(f"Toolshed tools used: {
+                    len(workflow_info.toolshed_tools)}")
+        logger.debug(workflow_info.toolshed_tools)
+        logger.info("-" * 40)
+
+        # Step 3: Store Galaxy Workflow in DB
+        ght.add_workflow_to_generic_table(workflow_info, session)
+        logger.info("Added workflow and tools to the database.")
+
+        number_of_wf_to_harvest += 1
+        if number_of_wf_to_harvest == no_of_workflows:
+            logger.info(
+                f"Harvested {
+                    number_of_wf_to_harvest
+                } workflows from {galaxy_instance_url}. Stopping harvest."
+            )
+            break
+    logger.info(
+        f"Harvested {
+            number_of_wf_to_harvest
+        } workflows from {galaxy_instance_url}. Harvesting process completed."
+    )

@@ -31,13 +31,8 @@ def main() -> None:
         )
 
         for tool in session.scalars(stmt):
-
-            # print("------------")
-            # print(f"id          : {tool.id}")
-            # print(f"uri         : {tool.uri}")
-            # print(f"name        : {tool.name}")
-            # print(f"description : {tool.description}")
-            # print(f"inputs      : {tool.input_slots}")
+            
+            logger.info(f"Processing tool: {tool.id} - {tool.name}")
 
             # Make a copy so SQLAlchemy sees reassignment
             input_slots = copy.deepcopy(tool.input_slots)           
@@ -50,7 +45,7 @@ def main() -> None:
                 for slot in input_slots:
                     if "optional" not in slot:
                         if slot["id"] == input_id:
-                            print(f"Updating input slot: '{slot["id"]}' for tool '{tool.id}'")
+                            logger.info(f"Updating input slot: '{slot["id"]}' for tool '{tool.id}'")
                             slot["optional"] = inputs.get("optional", False)
                             slot["default"] = inputs.get("default-value", None)
 

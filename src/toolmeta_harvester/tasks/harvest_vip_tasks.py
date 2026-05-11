@@ -81,7 +81,7 @@ def get_inputs(data):
             "description": input.get("description", ""),
             "type": (input.get("type") or "").lower(),
             "optional": input.get("optional", False),
-            "default": input.get("value-key", None),
+            "default": input.get("default-value", None),
             "file_formats": []
         }
         if input.get("type") == "File":
@@ -99,7 +99,7 @@ def get_outputs(data):
                         "description": output.get("description", ""),
                         "type": (output.get("type") or "").lower(),
                         "optional": output.get("optional", False),
-                        "default": output.get("value-key", None),
+                        "default": output.get("default-value", None),
                         "file_formats": [],
                         })
     return results

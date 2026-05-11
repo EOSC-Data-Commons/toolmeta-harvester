@@ -48,11 +48,11 @@ def main() -> None:
                 input_id = inputs.get("id")
 
                 for slot in input_slots:
-
-                    if slot["id"] == input_id:
-                        print(f"Updating input slot: '{slot["id"]}' for tool '{tool.id}'")
-                        slot["optional"] = inputs.get("optional", False)
-                        slot["default"] = inputs.get("default-value", None)
+                    if "optional" not in slot:
+                        if slot["id"] == input_id:
+                            print(f"Updating input slot: '{slot["id"]}' for tool '{tool.id}'")
+                            slot["optional"] = inputs.get("optional", False)
+                            slot["default"] = inputs.get("default-value", None)
 
             # Assign the modified input_slots back to the tool
             tool.input_slots = input_slots

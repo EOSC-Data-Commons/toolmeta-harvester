@@ -80,6 +80,8 @@ def get_inputs(data):
             "name": input.get("name", ""),
             "description": input.get("description", ""),
             "type": (input.get("type") or "").lower(),
+            "optional": input.get("optional", False),
+            "default": input.get("default-value", None),
             "file_formats": []
         }
         if input.get("type") == "File":
@@ -96,6 +98,8 @@ def get_outputs(data):
                         "name": output.get("name", ""),
                         "description": output.get("description", ""),
                         "type": (output.get("type") or "").lower(),
+                        "optional": output.get("optional", False),
+                        "default": output.get("default-value", None),
                         "file_formats": [],
                         })
     return results

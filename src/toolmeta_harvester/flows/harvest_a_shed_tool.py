@@ -104,3 +104,5 @@ if __name__ == "__main__":
     session.add(shed_generic)
     session.commit()
 
+    logger.info(f"Added tool '{shed_generic.id}' to the database with URI: {shed_generic.uri}")
+

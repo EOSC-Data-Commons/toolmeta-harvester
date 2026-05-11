@@ -2,6 +2,7 @@ import logging
 import requests
 import requests_cache
 import json
+import re
 import yaml
 from time import sleep
 from urllib.parse import urljoin
@@ -202,11 +203,24 @@ def parse_xml(tool_xml, dir_contents=None, repo_url=""):
     version = tree.get("version")
     # command = tree.findtext("command")
     shed_yml = get_shed_yml(repo_url)
-    description = (
-        tree.findtext("description")
-        or shed_yml.get("long_description")
-        or shed_yml.get("description")
-        or ""
+    # description = (
+    #     tree.findtext("description")
+    #     or shed_yml.get("long_description")
+    #     or shed_yml.get("description")
+    #     or ""
+    # )
+
+    candidates = [
+        shed_yml.get("long_description"),
+        shed_yml.get("description"),
+        tree.findtext("description"),
+        "",
+    ]
+
+    description = max(
+        (d for d in candidates if d),
+        key=len,
+        default="",
     )
     help = tree.findtext("help") or ""
     owner = shed_yml.get("owner", "")
@@ -447,6 +461,9 @@ def get_git_tree(repo_api_url):
 
 def strip_query(url: str) -> str:
     p = urlparse(url)
+     # collapse multiple slashes in path
+    # path = re.sub(r"/+", "/", p.path)
+    # return f"{p.scheme}://{p.netloc}{path}"
     return f"{p.scheme}://{p.netloc}{p.path}"
 
 
@@ -480,9 +497,14 @@ def get_tool_folders(repo_api_url):
             folder = "/".join(item["path"].split("/")[:-1])
             if folder.startswith(base_path):
                 folder = folder[len(base_path) :]
-            folder = f"{strip_query(repo_api_url)}/{folder}?ref={branch}"
+            # folder = f"{strip_query(repo_api_url)}/{folder}?ref={branch}"
+            folder_url = urljoin(
+                strip_query(repo_api_url).rstrip("/") + "/",
+                folder.lstrip("/"),
+            )
+            folder = f"{folder_url}?ref={branch}"
             if folder:
-                logger.debug(f"Found tool url folder: {folder}")
+                logger.info(f"Found tool url folder: {folder}")
                 tool_folders.add(folder)
     return list(tool_folders)
 
@@ -504,7 +526,7 @@ def smart_crawl_repository(repo_api_url):
 
 
 # Generator version of s mart_crawl_repository
-def smart_crawl_repository_iter(repo_api_url):
+def smart_crawl_repository_iter(repo_api_url, tool_name=None):
     tool_folders = get_tool_folders(repo_api_url)
     logger.debug(
         f"Smart crawling repository: {repo_api_url} with {
@@ -512,6 +534,9 @@ def smart_crawl_repository_iter(repo_api_url):
         } tool folders"
     )
     for url in tool_folders:
+        if tool_name and (tool_name not in url):
+            logger.debug(f"Skipping folder {url} because it does not contain tool name {tool_name}")
+            continue
         tools = crawl_repository(url)
         logger.debug(f"Found {len(tools)} tools in {url}")
         yield (url, tools)

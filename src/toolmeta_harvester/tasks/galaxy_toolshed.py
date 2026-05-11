@@ -203,12 +203,6 @@ def parse_xml(tool_xml, dir_contents=None, repo_url=""):
     version = tree.get("version")
     # command = tree.findtext("command")
     shed_yml = get_shed_yml(repo_url)
-    # description = (
-    #     tree.findtext("description")
-    #     or shed_yml.get("long_description")
-    #     or shed_yml.get("description")
-    #     or ""
-    # )
 
     candidates = [
         shed_yml.get("long_description"),
@@ -461,9 +455,6 @@ def get_git_tree(repo_api_url):
 
 def strip_query(url: str) -> str:
     p = urlparse(url)
-     # collapse multiple slashes in path
-    # path = re.sub(r"/+", "/", p.path)
-    # return f"{p.scheme}://{p.netloc}{path}"
     return f"{p.scheme}://{p.netloc}{p.path}"
 
 
@@ -504,7 +495,7 @@ def get_tool_folders(repo_api_url):
             )
             folder = f"{folder_url}?ref={branch}"
             if folder:
-                logger.info(f"Found tool url folder: {folder}")
+                logger.debug(f"Found tool url folder: {folder}")
                 tool_folders.add(folder)
     return list(tool_folders)
 

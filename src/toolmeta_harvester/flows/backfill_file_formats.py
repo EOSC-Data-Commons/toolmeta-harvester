@@ -84,19 +84,5 @@ def main() -> None:
         backfill_input_file_formats(session)
         backfill_output_file_formats(session)
 
-
-        # stmt = select(ToolGeneric)
-        #
-        # for tool in session.scalars(stmt):
-        #
-        #     print("------------")
-        #     print(f"id          : {tool.id}")
-        #     print(f"uri         : {tool.uri}")
-        #     print(f"name        : {tool.name}")
-        #     print(f"description : {tool.description}")
-        #
-        #     # TODO: Enrich logic here.
-
-
 if __name__ == "__main__":
     main()

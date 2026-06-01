@@ -842,6 +842,19 @@ wheels = [
 ]
 
 [[package]]
+name = "sickle"
+version = "0.7.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "lxml" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a3/78/8fe5fc3d7379593abf0b42b97e7ad9981437afd5cf5ae2032536def9d411/Sickle-0.7.0.tar.gz", hash = "sha256:8944bcda3db0109a361248ef71fef476dd1f11109cdd1a41135527b7992b958b", size = 106804, upload-time = "2020-05-17T08:45:30.53Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/59/c4/e98ed4dfc15f51245e17626dab983ffde53f9f03ef5100938bcb4996427f/Sickle-0.7.0-py3-none-any.whl", hash = "sha256:6ace7b1d1fc76571fe0dbfefc2c49e5e6c026e2d0dcaae521f4da21e98d4bc85", size = 12575, upload-time = "2020-05-17T08:45:28.923Z" },
+]
+
+[[package]]
 name = "sqlalchemy"
 version = "2.0.48"
 source = { registry = "https://pypi.org/simple" }
@@ -913,6 +926,7 @@ dependencies = [
     { name = "pyyaml" },
     { name = "requests" },
     { name = "requests-cache" },
+    { name = "sickle" },
     { name = "sqlalchemy" },
     { name = "sqlalchemy-utils" },
     { name = "toolmeta-models" },
@@ -929,6 +943,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "requests", specifier = ">=2.32.5" },
     { name = "requests-cache", specifier = ">=1.2.1" },
+    { name = "sickle", specifier = ">=0.7.0" },
     { name = "sqlalchemy", specifier = ">=2.0.45" },
     { name = "sqlalchemy-utils", specifier = ">=0.42.1" },
     { name = "toolmeta-models", git = "https://github.com/EOSC-Data-Commons/toolmeta-models.git?rev=v0.2.3" },

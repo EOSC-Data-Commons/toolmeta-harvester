@@ -14,9 +14,14 @@
 - [x] Data models for Galaxy tools and workflows
 - [x] Generalized data model for artifacts and contracts
 - [x] Initial data harvesting and storage from WorkflowHub
-- [ ] Deployment to Warehouse
 - [ ] Basic documentation (README, setup, usage)
+
+## 🚧 Phase 2 — Expansion and Refinement
+
+- [ ] Additional harvest pipelines (e.g. usegalaxy, bio.tools)
+- [ ] Task manager e.g. Celery or Prefect for scheduling and orchestration
 - [ ] Basic tests and CI pipeline
+- [ ] Deployment to Warehouse
 - [ ] Create initial embedding pipeline
 
 # Installation and Usage

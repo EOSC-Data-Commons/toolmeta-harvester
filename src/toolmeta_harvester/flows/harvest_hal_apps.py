@@ -5,6 +5,7 @@ import io
 import struct
 import zipfile
 import xml.etree.ElementTree as ET
+from urllib.parse import parse_qs, urlsplit
 from sickle import Sickle
 import requests
 
@@ -27,13 +28,17 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+log = logger
 
 # Important: Ensure ending forward slash in API_URL for correct endpoint construction in post_json_to_registry
 # Development API URL
-API_URL = "https://api.archives-ouvertes.fr/oai/hal/?verb=ListRecords&metadataPrefix=oai_datacite&set=collection:LINKED_RESEARCH_OUTPUTS"
+API_URL = settings.get(
+    "hal.api_url",
+    "https://api.archives-ouvertes.fr/oai/hal/?verb=ListRecords&metadataPrefix=oai_datacite&set=collection:LINKED_RESEARCH_OUTPUTS",
+)
 # Production API URL
 # API_URL = "https://dev.tools-registry.eosc-data-commons.eu/api/v1/tools/"
-ZENODO_RECORD_API = "https://zenodo.org/api/records"
+ZENODO_RECORD_API = settings.get("zenodo.record_api", "https://zenodo.org/api/records")
 
 
 def extract_zenodo_record_id(doi):
@@ -255,9 +260,11 @@ def get_tools(api_url):
 
 def harvest_hal_using_postgres_backend():
     session = vip.get_db_session()
-    oai_url = "https://api.archives-ouvertes.fr/oai/hal"
-    metadata_prefix = "oai_datacite"
-    metadata_set = "collection:LINKED_RESEARCH_OUTPUTS"
+    parsed_api = urlsplit(API_URL)
+    oai_url = f"{parsed_api.scheme}://{parsed_api.netloc}{parsed_api.path}"
+    query_params = parse_qs(parsed_api.query)
+    metadata_prefix = query_params.get("metadataPrefix", ["oai_datacite"])[0]
+    metadata_set = query_params.get("set", ["collection:LINKED_RESEARCH_OUTPUTS"])[0]
     sickle = Sickle(oai_url)
     records = sickle.ListRecords(metadataPrefix=metadata_prefix, set=metadata_set)
 
@@ -266,11 +273,11 @@ def harvest_hal_using_postgres_backend():
     }
     seen_dois = set()
     zenodo_records = []
-    print("Processing records from HAL OAI-PMH endpoint...")
+    log.info("Processing records from HAL OAI-PMH endpoint...")
     tools = []
     for i, record in enumerate(records, start=1):
-        print(f"Processing record: {i}")
-        # print(f"Record {i}: {record}")
+        log.info(f"Processing record: {i}")
+        # log.info(f"Record {i}: {record}")
         doi_value = None
         try:
             root = ET.fromstring(str(record))
@@ -285,7 +292,7 @@ def harvest_hal_using_postgres_backend():
 
         if doi_value and "/zenodo." in doi_value.lower() and doi_value not in seen_dois:
             seen_dois.add(doi_value)
-            print(f"DOI {i}: {doi_value}")
+            log.info(f"DOI {i}: {doi_value}")
 
             try:
                 metadata = fetch_zenodo_metadata_record(doi_value)
@@ -299,10 +306,10 @@ def harvest_hal_using_postgres_backend():
 
             zenodo_records.append({"doi": doi_value, "metadata": metadata})
             rec_id = metadata.get("id", "unknown")
-            print(f"Zenodo record {rec_id} fetched for {doi_value}")
+            log.info(f"Zenodo record {rec_id} fetched for {doi_value}")
             files = metadata.get("files") or []
             if not files:
-                print("  notebook files: []")
+                log.info("  notebook files: []")
             else:
                 printed_any = False
                 for file_item in files:
@@ -312,31 +319,31 @@ def harvest_hal_using_postgres_backend():
 
                     if is_notebook_file(file_name):
                         if not printed_any:
-                            print("  notebook files:")
+                            log.info("  notebook files:")
                             printed_any = True
-                        print(f"    - {file_name} {file_url}".rstrip())
-                        print("--------------")
-                        print(f"Record {i}: {record}")
-                        print('---------------')
+                        log.info(f"    - {file_name} {file_url}".rstrip())
+                        log.info("--------------")
+                        log.info(f"Record {i}: {record}")
+                        log.info('---------------')
                         continue
 
                     if is_zip_file(file_name):
                         zip_notebooks = get_zip_notebooks(file_url)
                         if zip_notebooks:
                             if not printed_any:
-                                print("  notebook files:")
+                                log.info("  notebook files:")
                                 printed_any = True
-                            print(f"    - {file_name} {file_url}".rstrip())
+                            log.info(f"    - {file_name} {file_url}".rstrip())
                             for notebook_name in zip_notebooks:
-                                print("=======")
-                                print(f"Record {i}: {record}")
-                                print('========')
+                                log.info("=======")
+                                log.info(f"Record {i}: {record}")
+                                log.info('========')
                                 tool = set_tool_data()
                                 tools.append(tool)
-                                print(f"      contains: {notebook_name}")
+                                log.info(f"      contains: {notebook_name}")
 
                 if not printed_any:
-                    print("  notebook files: []")
+                    log.info("  notebook files: []")
 
     logger.info(f"Collected {len(seen_dois)} unique Zenodo DOI(s)")
     logger.info(f"Fetched {len(zenodo_records)} Zenodo metadata record(s)")

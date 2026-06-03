@@ -325,6 +325,19 @@ def harvest_hal_using_postgres_backend():
                         log.info("--------------")
                         log.info(f"Record {i}: {record}")
                         log.info('---------------')
+                        tool = set_tool_data(
+                            {
+                                "uri": (metadata.get("links") or {}).get("self") or f"{ZENODO_RECORD_API}/{rec_id}",
+                                "name": (metadata.get("metadata") or {}).get("title") or file_name,
+                                "version": (metadata.get("metadata") or {}).get("version") or metadata.get("version", ""),
+                                "location": file_url,
+                                "description": (metadata.get("metadata") or {}).get("description", ""),
+                                "raw_metadata": metadata,
+                                "raw_definition": "python_notebook",
+                                "metadata_type": "zenodo",
+                            }
+                        )
+                        tools.append(tool)
                         continue
 
                     if is_zip_file(file_name):
@@ -338,7 +351,18 @@ def harvest_hal_using_postgres_backend():
                                 log.info("=======")
                                 log.info(f"Record {i}: {record}")
                                 log.info('========')
-                                tool = set_tool_data()
+                                tool = set_tool_data(
+                                    {
+                                        "uri": (metadata.get("links") or {}).get("self") or f"{ZENODO_RECORD_API}/{rec_id}",
+                                        "name": (metadata.get("metadata") or {}).get("title") or notebook_name,
+                                        "version": (metadata.get("metadata") or {}).get("version") or metadata.get("version", ""),
+                                        "location": file_url,
+                                        "description": (metadata.get("metadata") or {}).get("description", ""),
+                                        "raw_metadata": metadata,
+                                        "raw_definition": "python_notebook",
+                                        "metadata_type": "zenodo",
+                                    }
+                                )
                                 tools.append(tool)
                                 log.info(f"      contains: {notebook_name}")
 
@@ -362,27 +386,36 @@ def harvest_hal_using_postgres_backend():
     #     counter += 1
     # logger.info(f"Successfully added {counter} VIP apps to the database")
 
-def set_tool_data(data):
+def set_tool_data(data=None):
+    data = data or {}
     tool = {
-        "uri": data.get("uri", ""),
-        "name": data.get("name", ""),
-        "version": data.get("version", ""),
-        "location": data.get("location", ""),
-        "archetype": "your_archetype_here",  # Replace with the appropriate archetype
-        "description": data.get("description", ""),  # Replace with actual field name for description if different
+        "uri": data.get("uri", "https://zenodo.org/api/records/20357473"),
+        "name": data.get(
+            "name",
+            "BA-FedSHAP: A reproducible toolkit for auditing background-induced attribution drift in federated SHAP explanations",
+        ),
+        "version": data.get("version", "v1.0.1-softx"),
+        "location": data.get(
+            "location",
+            "https://zenodo.org/api/records/20357473/files/roy-saurabh/ba_fedshap-v1.0.1-softx.zip/content",
+        ),
+        "types": data.get("types", ["python_notebook", "zenodo", "hal"]),
+        "description": data.get(
+            "description",
+            "Open-source Python toolkit for federated SHAP attribution auditing under non-IID partitioning and differential-privacy release. Bundles six fairness datasets, six baseline methods, audit metrics with bootstrap CIs and permutation p-values, and Renyi-DP accounting. Includes a reproducible 15-cell COMPAS low-compute demonstration (configs/compas_lowcompute_softx.yaml; 5 seeds x 3 Dirichlet alpha levels) at the SoftwareX submission. The toolkit is positioned as a diagnostic framework, not as a method that empirically dominates simpler baselines.",
+        ),
         "input_file_formats": data.get("input_file_formats", []),
-        # Replace with actual field name for input file formats if different
         "output_file_formats": data.get("output_file_formats", []),
-        # Replace with actual field name for output file formats if different
         "input_file_descriptions": data.get("input_file_descriptions", []),
-        # Replace with actual field name for input file descriptions if different
         "output_file_descriptions": data.get("output_file_descriptions", []),
-        # Replace with actual field name for output file descriptions if different
-        "raw_metadata": data,  # Store the original metadata for reference
-        "metadata_version": data.get("schema-version", ""),
-        # Replace with the actual field name for metadata version if different
-        "metadata_schema": {},  # Replace with actual schema if available
-        "metadata_type": "your_metadata_type_here",  # Replace with the appropriate metadata type
+        "raw_metadata": data.get(
+            "raw_metadata",
+            "json records of https://zenodo.org/api/records/20357473",
+        ),
+        "metadata_version": data.get("metadata_version") or data.get("schema-version", ""),
+        "raw_definition": data.get("raw_definition", "python_notebook"),
+        "metadata_schema": data.get("metadata_schema", {}),
+        "metadata_type": data.get("metadata_type", "zenodo"),
 
     }
     return tool

@@ -1,3 +1,4 @@
+import json
 import logging
 from pathlib import Path
 import re
@@ -11,7 +12,7 @@ import requests
 
 from toolmeta_harvester import config
 from toolmeta_harvester.config import settings
-from toolmeta_harvester.tasks import harvest_vip_tasks as vip
+from toolmeta_harvester.tasks import harvest_hal_tasks as hal
 
 LOG_FILE = (
     settings.get("LOG_FILE")
@@ -180,57 +181,7 @@ def get_zip_notebooks(file_url):
         logger.warning(f"Failed to inspect zip file {file_url}: {e}")
         return []
 
-def get_app_metadata():
-    results = {}
-    app_names = [app["name"] for app in app_index]
-    logger.debug(f"Fetched VIP index with {len(app_index)} entries.")
-    for folder in LOCAL_DIR.iterdir():
-        if folder.is_dir():
-            json_files = list(folder.glob("*.json"))
 
-            if not json_files:
-                logger.debug(f"No JSON files in {folder}")
-                continue
-
-            for json_file in json_files:
-                data = process_json_file(json_file)
-                if data is None:
-                    continue
-                if data.get("name") is None:
-                    logger.warning(f"No 'name' field in {json_file}, skipping.")
-                    continue
-                if data.get("tool-version") is None:
-                    logger.warning(f"No 'tool-version' field in {json_file}, skipping.")
-                    continue
-                name = data.get("name")
-                version = data.get("tool-version")
-                location = build_git_url(*get_repo_info(), json_file)
-                if name in app_names:
-                    logger.debug(f"App '{name}' found in VIP index.")
-                    tool = {
-                        "uri": f"{BASE_URI}{name}/{version}",
-                        "name": name,
-                        "version": version,
-                        "location": location,
-                        "types": ["boutique", "vip"],
-                        "description": data.get("description", ""),
-                        "input_file_formats": [],
-                        "output_file_formats": [],
-                        "input_file_descriptions": get_input_descriptions(data),
-                        "output_file_descriptions": get_output_descriptions(data),
-                        "input_slots": get_inputs(data),
-                        "output_slots": get_outputs(data),
-                        "raw_definition": data,
-                        "raw_metadata": data,
-                        "metadata_version": data.get("schema-version", ""),
-                        "metadata_schema": {},
-                        "metadata_type": "boutique_descriptor",
-
-                    }
-                    results[(name, version)] = tool
-                else:
-                    logger.warning(f"App '{name}' NOT found in VIP index.")
-    return results
 
 def get_input_descriptions(data):
     inputs = data.get("inputs", [])
@@ -259,7 +210,7 @@ def get_tools(api_url):
         return []
 
 def harvest_hal_using_postgres_backend():
-    session = vip.get_db_session()
+    session = hal.get_db_session()
     parsed_api = urlsplit(API_URL)
     oai_url = f"{parsed_api.scheme}://{parsed_api.netloc}{parsed_api.path}"
     query_params = parse_qs(parsed_api.query)
@@ -337,6 +288,7 @@ def harvest_hal_using_postgres_backend():
                                 "metadata_type": "zenodo",
                             }
                         )
+                        log.info(json.dumps(tool, indent=4))
                         tools.append(tool)
                         continue
 
@@ -363,6 +315,7 @@ def harvest_hal_using_postgres_backend():
                                         "metadata_type": "zenodo",
                                     }
                                 )
+                                log.info(json.dumps(tool, indent=4))
                                 tools.append(tool)
                                 log.info(f"      contains: {notebook_name}")
 
@@ -373,13 +326,13 @@ def harvest_hal_using_postgres_backend():
     logger.info(f"Fetched {len(zenodo_records)} Zenodo metadata record(s)")
     return zenodo_records
 
-    # apps = vip.get_app_metadata()
+    # apps = hal.get_app_metadata()
     # logger.info(f"Harvested {len(apps)} VIP apps")
     # counter = 0
     # for (name, version), tool in apps.items():
     #     logger.info(f"App: {name}, Version: {version}, URI: {tool['uri']}")
     #     logger.info(f"Input slots: {tool.get('input_slots', [])}")
-    #     tool_from_db = vip.add_json_to_db(tool, session)
+    #     tool_from_db = hal.add_json_to_db(tool, session)
     #     if not tool_from_db:
     #         logger.error(f"Failed to add {name} version {version} to database")
     #         continue

@@ -163,3 +163,9 @@ def post_json_to_registry(data, api_url, token=None, timeout=10):
             "error": str(exc),
         }
 
+
+if __name__ == "__main__":
+    from toolmeta_harvester.flows.harvest_hal_apps import harvest_hal_using_postgres_backend
+    harvest_hal_using_postgres_backend()
+
+

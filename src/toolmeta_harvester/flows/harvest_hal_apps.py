@@ -226,6 +226,7 @@ def harvest_hal_using_postgres_backend():
     zenodo_records = []
     log.info("Processing records from HAL OAI-PMH endpoint...")
     tools = []
+    saved_count = 0
     for i, record in enumerate(records, start=1):
         log.info(f"Processing record: {i}")
         # log.info(f"Record {i}: {record}")
@@ -288,8 +289,12 @@ def harvest_hal_using_postgres_backend():
                                 "metadata_type": "zenodo",
                             }
                         )
-                        log.info(json.dumps(tool, indent=4))
+                        log_tool = {k: v for k, v in tool.items() if k != "raw_metadata"}
+                        log.info(json.dumps(log_tool, indent=4, default=str))
                         tools.append(tool)
+                        saved = hal.add_json_to_db(tool, session)
+                        if saved:
+                            saved_count += 1
                         continue
 
                     if is_zip_file(file_name):
@@ -315,8 +320,12 @@ def harvest_hal_using_postgres_backend():
                                         "metadata_type": "zenodo",
                                     }
                                 )
-                                log.info(json.dumps(tool, indent=4))
+                                log_tool = {k: v for k, v in tool.items() if k != "raw_metadata"}
+                                log.info(json.dumps(log_tool, indent=4, default=str))
                                 tools.append(tool)
+                                saved = hal.add_json_to_db(tool, session)
+                                if saved:
+                                    saved_count += 1
                                 log.info(f"      contains: {notebook_name}")
 
                 if not printed_any:
@@ -324,6 +333,7 @@ def harvest_hal_using_postgres_backend():
 
     logger.info(f"Collected {len(seen_dois)} unique Zenodo DOI(s)")
     logger.info(f"Fetched {len(zenodo_records)} Zenodo metadata record(s)")
+    logger.info(f"Built {len(tools)} tool(s), saved {saved_count} to the database")
     return zenodo_records
 
     # apps = hal.get_app_metadata()

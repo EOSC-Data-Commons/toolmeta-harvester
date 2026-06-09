@@ -7,11 +7,11 @@ from toolmeta_harvester.db.models import (
 )
 
 from toolmeta_models import (
-    ToolArtifact,
-    ToolContract,
-    ToolInput,
-    ToolOutput,
-    ToolImplementation,
+    # ToolArtifact,
+    # ToolContract,
+    # ToolInput,
+    # ToolOutput,
+    # ToolImplementation,
     ToolGeneric,
 )
 
@@ -75,43 +75,43 @@ def get_all_repositories():
             logger.debug(f"Repository: {repo.url} with status: {repo.status}")
 
 
-def process_single_repository(repo_url, session):
-    # tools = galaxy_toolshed.smart_crawl_repository(repo_url)
-    # print(f"Processing repository: {repo_url} with {len(tools)} tools found.")
-    tool_folders = galaxy_toolshed.get_tool_folders(repo_url)
-    for url in tool_folders:
-        results = session.query(ToolHarvest).filter_by(url=url).all()
-        repo = None
-        if len(results) > 0:
-            repo = results[0]
-            if repo.status == "completed":
-                logger.debug(
-                    f"Repository {
-                        url} already exists in the database. Skipping."
-                )
-                continue
-        else:
-            repo = ToolHarvest(
-                url=url, status="pending", artifact_type="galaxy_shed_tool"
-            )
-            session.add(repo)
-            session.commit()
-            session.flush()
-        try:
-            tools = galaxy_toolshed.crawl_repository(url)
-
-            for tool in tools:
-                add_tool_to_db(tool, session)
-                repo.status = "processed"
-                session.commit()
-                session.flush()
-
-        except Exception as e:
-            logger.error(f"Error processing repository {url}: {e}")
-            repo.status = "error"
-            session.commit()
-            session.flush()
-            continue
+# def process_single_repository(repo_url, session):
+#     # tools = galaxy_toolshed.smart_crawl_repository(repo_url)
+#     # print(f"Processing repository: {repo_url} with {len(tools)} tools found.")
+#     tool_folders = galaxy_toolshed.get_tool_folders(repo_url)
+#     for url in tool_folders:
+#         results = session.query(ToolHarvest).filter_by(url=url).all()
+#         repo = None
+#         if len(results) > 0:
+#             repo = results[0]
+#             if repo.status == "completed":
+#                 logger.debug(
+#                     f"Repository {
+#                         url} already exists in the database. Skipping."
+#                 )
+#                 continue
+#         else:
+#             repo = ToolHarvest(
+#                 url=url, status="pending", artifact_type="galaxy_shed_tool"
+#             )
+#             session.add(repo)
+#             session.commit()
+#             session.flush()
+#         try:
+#             tools = galaxy_toolshed.crawl_repository(url)
+#
+#             for tool in tools:
+#                 add_tool_to_db(tool, session)
+#                 repo.status = "processed"
+#                 session.commit()
+#                 session.flush()
+#
+#         except Exception as e:
+#             logger.error(f"Error processing repository {url}: {e}")
+#             repo.status = "error"
+#             session.commit()
+#             session.flush()
+#             continue
 
 
 def get_db_session():
@@ -190,91 +190,91 @@ def add_workflow_to_generic_table(wf, session):
         session.rollback()
         raise 
 
-def add_workflow_to_db(wf, session):
-    if not session:
-        session = Session(engine)
-    try:
-        db_wf = ToolArtifact(
-            id=wf.uuid,
-            name=wf.name,
-            version=wf.version,
-            archetype="galaxy_workflow",
-            location=wf.url,
-            raw_metadata=json.dumps(wf.raw_ga),
-            metadata_type="a_galaxy_workflow",
-            metadata_version=wf.raw_ga.get("format-version", "unknown"),
-        )
-
-        session.add(db_wf)
-
-        db_contract = ToolContract(
-            description=wf.description,
-            contract_version="0.1",
-        )
-
-        session.add(db_contract)
-        session.flush()  # Ensure db_contract.id is populated
-
-        db_implementation = ToolImplementation(
-            contract_id=db_contract.id,
-            artifact_id=db_wf.id,
-        )
-
-        session.add(db_implementation)
-
-        for tool in wf.input_tools:
-            for input in tool.inputs:
-                logger.debug(f"Processing input: {input}")
-                input_kind = {"param": "parameter", "data": "data"}.get(
-                    input.get("tag", ""), ""
-                )
-                db_input = ToolInput(
-                    contract_id=db_contract.id,
-                    name=input.get("name", ""),
-                    role=input.get("tag", ""),
-                    input_kind=input_kind,
-                    type=input.get("type", ""),
-                    # modality=input.get("type", ""),
-                    description=input.get("label", ""),
-                    encoding_formats=[],
-                )
-                formats = input.get("format").split(
-                    ",") if input.get("format") else []
-                for fmt in formats:
-                    db_input.encoding_formats.append(fmt.strip())
-                session.add(db_input)
-
-            for output in tool.outputs:
-                db_output = ToolOutput(
-                    contract_id=db_contract.id,
-                    name=output.get("name", ""),
-                    # role=output.get("tag", ""),
-                    # modality=output.get("type", ""),
-                    type=output.get("type", ""),
-                    description=output.get("label", ""),
-                    encoding_formats=[],
-                )
-                formats = (
-                    output.get("format").split(
-                        ",") if output.get("format") else []
-                )
-                for fmt in formats:
-                    db_output.encoding_formats.append(fmt.strip())
-
-                session.add(db_output)
-
-        session.flush()
-        logger.info(
-            f"Adding workflow: {db_wf.id}, {
-                db_wf.name}, version: {db_wf.version}"
-        )
-
-        session.commit()
-        session.flush()
-    except IntegrityError as e:
-        logger.error(f"IntegrityError for workflow tool {db_wf.id}: {e}")
-        session.rollback()
-
+# def add_workflow_to_db(wf, session):
+#     if not session:
+#         session = Session(engine)
+#     try:
+#         db_wf = ToolArtifact(
+#             id=wf.uuid,
+#             name=wf.name,
+#             version=wf.version,
+#             archetype="galaxy_workflow",
+#             location=wf.url,
+#             raw_metadata=json.dumps(wf.raw_ga),
+#             metadata_type="a_galaxy_workflow",
+#             metadata_version=wf.raw_ga.get("format-version", "unknown"),
+#         )
+#
+#         session.add(db_wf)
+#
+#         db_contract = ToolContract(
+#             description=wf.description,
+#             contract_version="0.1",
+#         )
+#
+#         session.add(db_contract)
+#         session.flush()  # Ensure db_contract.id is populated
+#
+#         db_implementation = ToolImplementation(
+#             contract_id=db_contract.id,
+#             artifact_id=db_wf.id,
+#         )
+#
+#         session.add(db_implementation)
+#
+#         for tool in wf.input_tools:
+#             for input in tool.inputs:
+#                 logger.debug(f"Processing input: {input}")
+#                 input_kind = {"param": "parameter", "data": "data"}.get(
+#                     input.get("tag", ""), ""
+#                 )
+#                 db_input = ToolInput(
+#                     contract_id=db_contract.id,
+#                     name=input.get("name", ""),
+#                     role=input.get("tag", ""),
+#                     input_kind=input_kind,
+#                     type=input.get("type", ""),
+#                     # modality=input.get("type", ""),
+#                     description=input.get("label", ""),
+#                     encoding_formats=[],
+#                 )
+#                 formats = input.get("format").split(
+#                     ",") if input.get("format") else []
+#                 for fmt in formats:
+#                     db_input.encoding_formats.append(fmt.strip())
+#                 session.add(db_input)
+#
+#             for output in tool.outputs:
+#                 db_output = ToolOutput(
+#                     contract_id=db_contract.id,
+#                     name=output.get("name", ""),
+#                     # role=output.get("tag", ""),
+#                     # modality=output.get("type", ""),
+#                     type=output.get("type", ""),
+#                     description=output.get("label", ""),
+#                     encoding_formats=[],
+#                 )
+#                 formats = (
+#                     output.get("format").split(
+#                         ",") if output.get("format") else []
+#                 )
+#                 for fmt in formats:
+#                     db_output.encoding_formats.append(fmt.strip())
+#
+#                 session.add(db_output)
+#
+#         session.flush()
+#         logger.info(
+#             f"Adding workflow: {db_wf.id}, {
+#                 db_wf.name}, version: {db_wf.version}"
+#         )
+#
+#         session.commit()
+#         session.flush()
+#     except IntegrityError as e:
+#         logger.error(f"IntegrityError for workflow tool {db_wf.id}: {e}")
+#         session.rollback()
+#
 
 # def add_tool_to_db(tool, session):
 #     if not session:

@@ -182,6 +182,47 @@ def get_zip_notebooks(file_url):
         return []
 
 
+def _decode_text_bytes(raw_bytes):
+    try:
+        return raw_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        return raw_bytes.decode("utf-8", errors="replace")
+
+
+def get_notebook_content(file_url):
+    if not file_url:
+        return ""
+
+    try:
+        response = requests.get(file_url, timeout=30)
+        response.raise_for_status()
+        return _decode_text_bytes(response.content)
+    except requests.RequestException as e:
+        logger.warning(f"Failed to fetch notebook content {file_url}: {e}")
+        return ""
+
+
+def get_zip_notebook_contents(file_url):
+    if not file_url:
+        return {}
+
+    try:
+        response = requests.get(file_url, timeout=30)
+        response.raise_for_status()
+        contents = {}
+        with zipfile.ZipFile(io.BytesIO(response.content)) as zf:
+            for name in zf.namelist():
+                if not is_notebook_file(name):
+                    continue
+                try:
+                    contents[name] = _decode_text_bytes(zf.read(name))
+                except KeyError:
+                    logger.warning(f"Notebook entry {name} not found in zip: {file_url}")
+        return contents
+    except (requests.RequestException, zipfile.BadZipFile) as e:
+        logger.warning(f"Failed to extract notebook content from zip {file_url}: {e}")
+        return {}
+
 
 def get_input_descriptions(data):
     inputs = data.get("inputs", [])
@@ -277,6 +318,10 @@ def harvest_hal_using_postgres_backend():
                         log.info("--------------")
                         log.info(f"Record {i}: {record}")
                         log.info('---------------')
+                        notebook_content = get_notebook_content(file_url)
+                        if not notebook_content:
+                            log.info(f"empty notebook: {file_name}")
+                            notebook_content = ""
                         tool = set_tool_data(
                             {
                                 "uri": (metadata.get("links") or {}).get("self") or f"{ZENODO_RECORD_API}/{rec_id}",
@@ -285,11 +330,11 @@ def harvest_hal_using_postgres_backend():
                                 "location": file_url,
                                 "description": (metadata.get("metadata") or {}).get("description", ""),
                                 "raw_metadata": metadata,
-                                "raw_definition": "python_notebook",
+                                "raw_definition": notebook_content,
                                 "metadata_type": "zenodo",
                             }
                         )
-                        log_tool = {k: v for k, v in tool.items() if k != "raw_metadata"}
+                        log_tool = {k: v for k, v in tool.items() if k not in {"raw_metadata", "raw_definition"}}
                         log.info(json.dumps(log_tool, indent=4, default=str))
                         tools.append(tool)
                         saved = hal.add_json_to_db(tool, session)
@@ -300,6 +345,7 @@ def harvest_hal_using_postgres_backend():
                     if is_zip_file(file_name):
                         zip_notebooks = get_zip_notebooks(file_url)
                         if zip_notebooks:
+                            zip_notebook_contents = get_zip_notebook_contents(file_url)
                             if not printed_any:
                                 log.info("  notebook files:")
                                 printed_any = True
@@ -308,6 +354,10 @@ def harvest_hal_using_postgres_backend():
                                 log.info("=======")
                                 log.info(f"Record {i}: {record}")
                                 log.info('========')
+                                notebook_content = zip_notebook_contents.get(notebook_name, "")
+                                if not notebook_content:
+                                    log.info(f"empty notebook: {notebook_name}")
+                                    notebook_content = ""
                                 tool = set_tool_data(
                                     {
                                         "uri": (metadata.get("links") or {}).get("self") or f"{ZENODO_RECORD_API}/{rec_id}",
@@ -316,11 +366,11 @@ def harvest_hal_using_postgres_backend():
                                         "location": file_url,
                                         "description": (metadata.get("metadata") or {}).get("description", ""),
                                         "raw_metadata": metadata,
-                                        "raw_definition": "python_notebook",
+                                        "raw_definition": notebook_content,
                                         "metadata_type": "zenodo",
                                     }
                                 )
-                                log_tool = {k: v for k, v in tool.items() if k != "raw_metadata"}
+                                log_tool = {k: v for k, v in tool.items() if k not in {"raw_metadata", "raw_definition"}}
                                 log.info(json.dumps(log_tool, indent=4, default=str))
                                 tools.append(tool)
                                 saved = hal.add_json_to_db(tool, session)
@@ -351,32 +401,26 @@ def harvest_hal_using_postgres_backend():
 
 def set_tool_data(data=None):
     data = data or {}
+    location = data.get("location")
+    raw_definition = data.get("raw_definition")
+    if raw_definition is None and is_notebook_file(location):
+        raw_definition = get_notebook_content(location)
+    if raw_definition is None:
+        raw_definition = ""
     tool = {
         "uri": data.get("uri", "https://zenodo.org/api/records/20357473"),
-        "name": data.get(
-            "name",
-            "BA-FedSHAP: A reproducible toolkit for auditing background-induced attribution drift in federated SHAP explanations",
-        ),
-        "version": data.get("version", "v1.0.1-softx"),
-        "location": data.get(
-            "location",
-            "https://zenodo.org/api/records/20357473/files/roy-saurabh/ba_fedshap-v1.0.1-softx.zip/content",
-        ),
+        "name": data.get("name", None),
+        "version": data.get("version", None),
+        "location": data.get("location", None),
         "types": data.get("types", ["python_notebook", "zenodo", "hal"]),
-        "description": data.get(
-            "description",
-            "Open-source Python toolkit for federated SHAP attribution auditing under non-IID partitioning and differential-privacy release. Bundles six fairness datasets, six baseline methods, audit metrics with bootstrap CIs and permutation p-values, and Renyi-DP accounting. Includes a reproducible 15-cell COMPAS low-compute demonstration (configs/compas_lowcompute_softx.yaml; 5 seeds x 3 Dirichlet alpha levels) at the SoftwareX submission. The toolkit is positioned as a diagnostic framework, not as a method that empirically dominates simpler baselines.",
-        ),
+        "description": data.get("description", None),
         "input_file_formats": data.get("input_file_formats", []),
         "output_file_formats": data.get("output_file_formats", []),
         "input_file_descriptions": data.get("input_file_descriptions", []),
         "output_file_descriptions": data.get("output_file_descriptions", []),
-        "raw_metadata": data.get(
-            "raw_metadata",
-            "json records of https://zenodo.org/api/records/20357473",
-        ),
+        "raw_metadata": data.get("raw_metadata", {}),
         "metadata_version": data.get("metadata_version") or data.get("schema-version", ""),
-        "raw_definition": data.get("raw_definition", "python_notebook"),
+        "raw_definition": raw_definition,
         "metadata_schema": data.get("metadata_schema", {}),
         "metadata_type": data.get("metadata_type", "zenodo"),
 

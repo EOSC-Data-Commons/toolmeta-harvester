@@ -2,7 +2,7 @@ import logging
 from pathlib import Path
 from toolmeta_harvester import config
 from toolmeta_harvester.tasks import harvest_vip_tasks as vip
-LOG_FILE = Path("logs/harvest_galaxy_hub_workflows.log")
+LOG_FILE = Path("logs/harvest_vip_workflows.log")
 # Create directory if it does not exist
 LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
 
@@ -29,14 +29,20 @@ def harvest_vip_using_postgres_backend():
     logger.info(f"Harvested {len(apps)} VIP apps")
     counter = 0
     for (name, version), tool in apps.items():
-        logger.info(f"App: {name}, Version: {version}, URI: {tool['uri']}")
-        logger.info(f"Input slots: {tool.get('input_slots', [])}")
-        tool_from_db = vip.add_json_to_db(tool, session)
+        (tool_from_db, flag) = vip.add_json_to_db(tool, session)
         if not tool_from_db:
             logger.error(f"Failed to add {name} version {version} to database")
             continue
-        counter += 1
-    logger.info(f"Successfully added {counter} VIP apps to the database")
+        if flag==1:
+            logger.info(f"App: {name}, Version: {version}, URI: {tool['uri']}")
+            logger.debug(f"Input slots: {tool.get('input_slots', [])}")
+            logger.info(f"Successfully added {name} id {tool_from_db.id} to database")
+            counter += 1
+
+    if counter == 0:
+        logger.info("No new VIP apps were added to the database")
+    else:
+        logger.info(f"Successfully added {counter} VIP apps to the database")
 
 def harvest_vip_using_tool_registry_rest_api():
     vip.ensure_repo()

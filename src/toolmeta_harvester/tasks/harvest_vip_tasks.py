@@ -104,6 +104,13 @@ def get_outputs(data):
                         })
     return results
 
+def get_slot_file_formats(slots):
+    formats = set()
+    for inp in slots:
+        if "file_formats" in inp:
+            formats.update(inp["file_formats"])
+    return list(formats)
+
 
 def get_app_metadata():
     results = {}
@@ -135,6 +142,9 @@ def get_app_metadata():
                 name = data.get("name")
                 version = data.get("tool-version")
                 location = build_git_url(*get_repo_info(), json_file)
+                input_slots = get_inputs(data)
+                output_slots = get_outputs(data)
+
                 if name in app_names:
                     logger.debug(f"App '{name}' found in VIP index.")
                     tool = {
@@ -144,8 +154,8 @@ def get_app_metadata():
                         "location": location,
                         "types": ["boutique", "vip"],
                         "description": data.get("description", ""),
-                        "input_file_formats": [],
-                        "output_file_formats": [],
+                        "input_file_formats": get_slot_file_formats(input_slots),
+                        "output_file_formats": get_slot_file_formats(output_slots),
                         "input_file_descriptions": get_input_descriptions(data),
                         "output_file_descriptions": get_output_descriptions(data),
                         "input_slots": get_inputs(data),
@@ -241,8 +251,8 @@ def add_json_to_db(tool, session=None):
         ).scalar_one_or_none()
 
         if existing:
-            logger.info(f"VIP tool with URI {tool["uri"]} already exists in generic table. Skipping insert.")
-            return existing  # Already in DB → return it
+            logger.debug(f"VIP tool with URI {tool["uri"]} already exists in generic table. Skipping insert.")
+            return (existing, 0)  # Already in DB → return it
 
         vip_generic = ToolGeneric(
             uri=tool.get("uri", ""),
@@ -254,8 +264,8 @@ def add_json_to_db(tool, session=None):
             tags=tool.get("tags", []),
             keywords=tool.get("keywords", []),
             license=tool.get("license", ""),
-            # input_file_formats=tool.input_formats,
-            # output_file_formats=tool.output_formats,
+            input_file_formats=tool.get("input_file_formats",[]),
+            output_file_formats=tool.get("output_file_formats", []),
             input_file_descriptions=tool.get("input_file_descriptions", []),
             output_file_descriptions=tool.get("output_file_descriptions", []),
             input_slots=tool.get("input_slots", []),
@@ -271,12 +281,12 @@ def add_json_to_db(tool, session=None):
         session.add(vip_generic)
         session.commit()
         session.flush()
-        logger.info(f"Added VIP tool {tool["uri"]} to generic table with ID {vip_generic.id}")
-        return vip_generic
+        logger.debug(f"Added VIP tool {tool["uri"]} to generic table with ID {vip_generic.id}")
+        return (vip_generic, 1)  # New entry → return it
     except IntegrityError as e:
         logger.warning(f"IntegrityError for workflow tool {tool["uri"]}: {e}")
         session.rollback()
-        return None
+        return (None, -1)
     except Exception as e:
         logger.error(f"Error adding workflow {tool["uri"]} to generic table: {e}")
         session.rollback()

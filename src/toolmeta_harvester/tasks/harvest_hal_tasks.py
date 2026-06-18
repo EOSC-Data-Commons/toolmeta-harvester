@@ -85,7 +85,7 @@ def add_json_to_db(tool, session=None):
             logger.info(
                 f"HAL tool with URI {tool['uri']} already exists in generic table. Skipping insert."
             )
-            return existing
+            return (existing, False)
 
         hal_generic = ToolGeneric(
             uri=tool.get("uri", ""),
@@ -112,11 +112,11 @@ def add_json_to_db(tool, session=None):
         logger.info(
             f"Added HAL tool {tool['uri']} to generic table with ID {hal_generic.id}"
         )
-        return hal_generic
+        return (hal_generic, True)
     except IntegrityError as exc:
         logger.warning(f"IntegrityError for HAL tool {tool['uri']}: {exc}")
         session.rollback()
-        return None
+        return (None, None)
     except Exception as exc:
         logger.error(f"Error adding HAL tool {tool['uri']} to generic table: {exc}")
         session.rollback()

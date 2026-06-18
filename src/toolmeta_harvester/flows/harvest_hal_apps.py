@@ -29,7 +29,6 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
-log = logger
 
 # Important: Ensure ending forward slash in API_URL for correct endpoint construction in post_json_to_registry
 # Development API URL
@@ -172,7 +171,7 @@ def get_zip_notebooks(file_url):
         return zip_notebooks
 
     try:
-        logger.info(f"Range ZIP inspection unavailable for {file_url}; falling back to full download")
+        logger.debug(f"Range ZIP inspection unavailable for {file_url}; falling back to full download")
         response = requests.get(file_url, timeout=30)
         response.raise_for_status()
         with zipfile.ZipFile(io.BytesIO(response.content)) as zf:
@@ -196,7 +195,8 @@ def get_notebook_content(file_url):
     try:
         response = requests.get(file_url, timeout=30)
         response.raise_for_status()
-        return _decode_text_bytes(response.content)
+        text = _decode_text_bytes(response.content)
+        return json.loads(text)
     except requests.RequestException as e:
         logger.warning(f"Failed to fetch notebook content {file_url}: {e}")
         return ""
@@ -265,12 +265,12 @@ def harvest_hal_using_postgres_backend():
     }
     seen_dois = set()
     zenodo_records = []
-    log.info("Processing records from HAL OAI-PMH endpoint...")
+    logger.info("Processing records from HAL OAI-PMH endpoint...")
     tools = []
     saved_count = 0
     for i, record in enumerate(records, start=1):
-        log.info(f"Processing record: {i}")
-        # log.info(f"Record {i}: {record}")
+        logger.debug(f"Processing record: {i}")
+        # logger.info(f"Record {i}: {record}")
         doi_value = None
         try:
             root = ET.fromstring(str(record))
@@ -285,7 +285,7 @@ def harvest_hal_using_postgres_backend():
 
         if doi_value and "/zenodo." in doi_value.lower() and doi_value not in seen_dois:
             seen_dois.add(doi_value)
-            log.info(f"DOI {i}: {doi_value}")
+            logger.debug(f"DOI {i}: {doi_value}")
 
             try:
                 metadata = fetch_zenodo_metadata_record(doi_value)
@@ -299,10 +299,10 @@ def harvest_hal_using_postgres_backend():
 
             zenodo_records.append({"doi": doi_value, "metadata": metadata})
             rec_id = metadata.get("id", "unknown")
-            log.info(f"Zenodo record {rec_id} fetched for {doi_value}")
+            logger.info(f"Zenodo record {rec_id} fetched for {doi_value}")
             files = metadata.get("files") or []
             if not files:
-                log.info("  notebook files: []")
+                logger.debug("  notebook files: []")
             else:
                 printed_any = False
                 for file_item in files:
@@ -312,16 +312,16 @@ def harvest_hal_using_postgres_backend():
 
                     if is_notebook_file(file_name):
                         if not printed_any:
-                            log.info("  notebook files:")
+                            logger.debug("  notebook files:")
                             printed_any = True
-                        log.info(f"    - {file_name} {file_url}".rstrip())
-                        log.info("--------------")
-                        log.info(f"Record {i}: {record}")
-                        log.info('---------------')
+                        logger.debug(f"    - {file_name} {file_url}".rstrip())
+                        logger.debug("--------------")
+                        logger.debug(f"Record {i}: {record}")
+                        logger.debug('---------------')
                         notebook_content = get_notebook_content(file_url)
                         if not notebook_content:
-                            log.info(f"empty notebook: {file_name}")
-                            notebook_content = ""
+                            logger.debug(f"empty notebook: {file_name}")
+                            continue
                         tool = set_tool_data(
                             {
                                 "uri": (metadata.get("links") or {}).get("self") or f"{ZENODO_RECORD_API}/{rec_id}",
@@ -335,9 +335,9 @@ def harvest_hal_using_postgres_backend():
                             }
                         )
                         log_tool = {k: v for k, v in tool.items() if k not in {"raw_metadata", "raw_definition"}}
-                        log.info(json.dumps(log_tool, indent=4, default=str))
+                        logger.debug(json.dumps(log_tool, indent=4, default=str))
                         tools.append(tool)
-                        saved = hal.add_json_to_db(tool, session)
+                        (saved_tool, saved) = hal.add_json_to_db(tool, session)
                         if saved:
                             saved_count += 1
                         continue
@@ -347,17 +347,19 @@ def harvest_hal_using_postgres_backend():
                         if zip_notebooks:
                             zip_notebook_contents = get_zip_notebook_contents(file_url)
                             if not printed_any:
-                                log.info("  notebook files:")
+                                logger.debug("  notebook files:")
                                 printed_any = True
-                            log.info(f"    - {file_name} {file_url}".rstrip())
+                            logger.debug(f"    - {file_name} {file_url}".rstrip())
                             for notebook_name in zip_notebooks:
-                                log.info("=======")
-                                log.info(f"Record {i}: {record}")
-                                log.info('========')
+                                logger.debug("=======")
+                                logger.debug(f"Record {i}: {record}")
+                                logger.debug('========')
                                 notebook_content = zip_notebook_contents.get(notebook_name, "")
                                 if not notebook_content:
-                                    log.info(f"empty notebook: {notebook_name}")
-                                    notebook_content = ""
+                                    logger.debug(f"empty notebook: {notebook_name}")
+                                    continue
+
+
                                 tool = set_tool_data(
                                     {
                                         "uri": (metadata.get("links") or {}).get("self") or f"{ZENODO_RECORD_API}/{rec_id}",
@@ -366,20 +368,20 @@ def harvest_hal_using_postgres_backend():
                                         "location": file_url,
                                         "description": (metadata.get("metadata") or {}).get("description", ""),
                                         "raw_metadata": metadata,
-                                        "raw_definition": notebook_content,
+                                        "raw_definition": json.loads(notebook_content) if notebook_content else None,
                                         "metadata_type": "zenodo",
                                     }
                                 )
                                 log_tool = {k: v for k, v in tool.items() if k not in {"raw_metadata", "raw_definition"}}
-                                log.info(json.dumps(log_tool, indent=4, default=str))
+                                logger.debug(json.dumps(log_tool, indent=4, default=str))
                                 tools.append(tool)
-                                saved = hal.add_json_to_db(tool, session)
+                                (saved_tool, saved) = hal.add_json_to_db(tool, session)
                                 if saved:
                                     saved_count += 1
-                                log.info(f"      contains: {notebook_name}")
+                                logger.debug(f"      contains: {notebook_name}")
 
                 if not printed_any:
-                    log.info("  notebook files: []")
+                    logger.debug("  notebook files: []")
 
     logger.info(f"Collected {len(seen_dois)} unique Zenodo DOI(s)")
     logger.info(f"Fetched {len(zenodo_records)} Zenodo metadata record(s)")
@@ -408,7 +410,7 @@ def set_tool_data(data=None):
     if raw_definition is None:
         raw_definition = ""
     tool = {
-        "uri": data.get("uri", "https://zenodo.org/api/records/20357473"),
+        "uri": data.get("uri", None),
         "name": data.get("name", None),
         "version": data.get("version", None),
         "location": data.get("location", None),

@@ -16,10 +16,15 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Important: Ensure ending forward slash in API_URL for correct endpoint construction in post_json_to_registry
-# Development API URL
-API_URL = "http://tool-registry.eosc-data-commons.dansdemo.nl/api/v1/tools/"
-# Production API URL
+# Testing API URL
+# API_URL = "http://tool-registry.eosc-data-commons.dansdemo.nl/api/v1/tools/"
+
+# Warehouse dev API URL
 # API_URL = "https://dev.tools-registry.eosc-data-commons.eu/api/v1/tools/"
+
+# Production API URL
+API_URL = "https://tools-registry.eosc-data-commons.eu/api/v1/tools/"
+
 TOKEN = config.egi_token()
 
 def harvest_vip_using_postgres_backend():
@@ -45,21 +50,34 @@ def harvest_vip_using_postgres_backend():
         logger.info(f"Successfully added {counter} VIP apps to the database")
 
 def harvest_vip_using_tool_registry_rest_api():
+    registered_apps = vip.get_vip_tools_from_registry(API_URL)
+    app_uris = [app['uri'] for app in registered_apps]
     vip.ensure_repo()
     apps = vip.get_app_metadata()
     logger.info(f"Harvested {len(apps)} VIP apps")
     counter = 0
     for (name, version), tool in apps.items():
+        if tool['uri'] in app_uris:
+            logger.info(f"App: {name}, Version: {version} already registered, skipping")
+            continue
         logger.debug(f"App: {name}, Version: {version}, Location: {tool['location']}")
         response = vip.post_json_to_registry(tool, API_URL, TOKEN)
         if response.get("success"):
-            logger.info(f"Successfully posted {name} version {version} to registry")
+            tool_id = response.get("response", {}).get("tool_id")
+            logger.info(f"Successfully posted {name} version {version} to registry with id {tool_id}")
             logger.debug(f"Response: {response}")
             counter += 1
         else:
             logger.error(f"Failed to post {name} version {version} to registry: {response.get('error')}")
-    logger.info(f"Successfully posted {counter} VIP apps to the registry")
+    if counter == 0:
+        logger.info("No new VIP apps were posted to the registry")
+    else:
+        logger.info(f"Successfully posted {counter} VIP apps to the registry")
 
 
 if __name__ == "__main__":
-    harvest_vip_using_postgres_backend()
+    # Choose method to register the tools either:
+    # - Using the Postgres backend (uncomment the line below)
+    # harvest_vip_using_postgres_backend()
+    # - Using the Tool Registry REST API (uncomment the line below)
+    harvest_vip_using_tool_registry_rest_api()

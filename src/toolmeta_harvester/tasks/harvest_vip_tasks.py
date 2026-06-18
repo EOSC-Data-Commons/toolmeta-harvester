@@ -292,6 +292,15 @@ def add_json_to_db(tool, session=None):
         session.rollback()
         raise 
 
+def get_vip_tools_from_registry(api_url):
+    api_url = api_url.rstrip("/") + "/?type=vip"
+    try:
+        response = requests.get(api_url, timeout=10)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        logger.error(f"Failed to fetch VIP tools from API: {e}")
+        return []
 
 def post_json_to_registry(data, api_url, token=None, timeout=10):
     headers = {

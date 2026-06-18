@@ -1,6 +1,12 @@
 from dataclasses import dataclass
+import os
+from pathlib import Path
 from dynaconf import Dynaconf
 import json
+
+# Default BASE_DIR for Dynaconf interpolation in config/config.toml.
+# BASE_DIR is set to the project root (parent of the config/ directory) when not provided.
+os.environ.setdefault("BASE_DIR", str(Path(__file__).resolve().parents[2]))
 
 settings = Dynaconf(
     envvar_prefix="TOOL_REGISTRY",

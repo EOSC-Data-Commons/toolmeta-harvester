@@ -7,3 +7,13 @@ password = "yoursecretsecret"
 
 [github]
 api_key="your_github_api_key"
+
+[default]
+log_file = "@format {env[BASE_DIR]}/logs/tools.log"
+
+[hal]
+api_url = "https://api.archives-ouvertes.fr/oai/hal/?verb=ListRecords&metadataPrefix=oai_datacite&set=collection:LINKED_RESEARCH_OUTPUTS"
+
+[zenodo]
+record_api = "https://zenodo.org/api/records"
+

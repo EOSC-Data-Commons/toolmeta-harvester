@@ -195,9 +195,8 @@ def get_notebook_content(file_url):
     try:
         response = requests.get(file_url, timeout=30)
         response.raise_for_status()
-        return response.json()
-        # text = _decode_text_bytes(response.content)
-        # return json.loads(text)
+        text = _decode_text_bytes(response.content)
+        return json.loads(text)
     except requests.RequestException as e:
         logger.warning(f"Failed to fetch notebook content {file_url}: {e}")
         return ""

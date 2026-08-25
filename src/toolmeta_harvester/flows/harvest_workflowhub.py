@@ -134,6 +134,10 @@ def create_tool_metadata(
             "authors",
             [],
         ),
+        organizations=metadata.get(
+            "organizations",
+            [],
+        ),
         types=metadata.get(
             "types",
             [],

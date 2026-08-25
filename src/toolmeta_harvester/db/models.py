@@ -164,6 +164,12 @@ class ToolMetadata(Base):
         nullable=False,
     )
 
+    organizations: Mapped[list[dict]] = mapped_column(
+        JSONB,
+        default=list,
+        nullable=False,
+    )
+
     types: Mapped[list[str]] = mapped_column(
         ARRAY(Text),
         default=list,

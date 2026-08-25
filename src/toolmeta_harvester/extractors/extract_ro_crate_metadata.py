@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import quote, unquote
 
 from toolmeta_harvester.extractors.description import clean_description
 
@@ -15,41 +16,115 @@ def as_list(value: Any) -> list[Any]:
     return [value]
 
 
-def build_entity_index(crate: dict[str, Any]) -> dict[str, dict[str, Any]]:
+# def build_entity_index(crate: dict[str, Any]) -> dict[str, dict[str, Any]]:
+#     """
+#     Index all JSON-LD entities in an RO-Crate by @id.
+#     """
+#
+#     graph = crate.get("@graph", [])
+#
+#     if not isinstance(graph, list):
+#         raise ValueError("Invalid RO-Crate: '@graph' must be a list")
+#
+#     return {
+#         entity["@id"]: entity
+#         for entity in graph
+#         if isinstance(entity, dict) and isinstance(entity.get("@id"), str)
+#     }
+
+
+def build_entity_index(
+    crate: dict,
+) -> dict[str, dict]:
     """
-    Index all JSON-LD entities in an RO-Crate by @id.
+    Index RO-Crate entities by their original, encoded, and decoded @id.
     """
 
-    graph = crate.get("@graph", [])
+    entities = {}
 
-    if not isinstance(graph, list):
-        raise ValueError("Invalid RO-Crate: '@graph' must be a list")
+    for entity in crate.get("@graph", []):
+        if not isinstance(entity, dict):
+            continue
 
-    return {
-        entity["@id"]: entity
-        for entity in graph
-        if isinstance(entity, dict) and isinstance(entity.get("@id"), str)
-    }
+        entity_id = entity.get("@id")
+
+        if not isinstance(entity_id, str):
+            continue
+
+        entities[entity_id] = entity
+
+        decoded = unquote(entity_id)
+        entities.setdefault(decoded, entity)
+
+        encoded = quote(
+            entity_id,
+            safe="#/:?=&",
+        )
+        entities.setdefault(encoded, entity)
+
+    return entities
 
 
 def resolve(
-    value: Any,
-    entities: dict[str, dict[str, Any]],
-) -> Any:
+    value,
+    entities: dict[str, dict],
+):
     """
-    Resolve a JSON-LD reference against the RO-Crate entity index.
+    Resolve a JSON-LD @id reference against the RO-Crate entity index.
 
-    Example:
+    Handles differences between percent-encoded and decoded identifiers,
+    e.g.:
 
-        {"@id": "#python"}
-
-    becomes the corresponding entity from @graph, if present.
+        #John%20Smith
+        #John Smith
     """
 
-    if isinstance(value, dict) and "@id" in value:
-        return entities.get(value["@id"], value)
+    if not isinstance(value, dict) or "@id" not in value:
+        return value
+
+    entity_id = value["@id"]
+
+    # Exact match first
+    if entity_id in entities:
+        return entities[entity_id]
+
+    # Try URL-decoded form
+    decoded = unquote(entity_id)
+
+    if decoded in entities:
+        return entities[decoded]
+
+    # Try URL-encoded form
+    encoded = quote(
+        entity_id,
+        safe="#/:?=&",
+    )
+
+    if encoded in entities:
+        return entities[encoded]
 
     return value
+
+
+# def resolve(
+#     value: Any,
+#     entities: dict[str, dict[str, Any]],
+# ) -> Any:
+#     """
+#     Resolve a JSON-LD reference against the RO-Crate entity index.
+#
+#     Example:
+#
+#         {"@id": "#python"}
+#
+#     becomes the corresponding entity from @graph, if present.
+#     """
+#
+#     if isinstance(value, dict) and "@id" in value:
+#         return entities.get(value["@id"], value)
+#
+#     return value
+#
 
 
 def entity_value(
@@ -208,6 +283,20 @@ def get_property(
     return None
 
 
+def fallback_name_from_id(entity_id: str | None) -> str | None:
+    if not entity_id:
+        return None
+
+    value = unquote(entity_id)
+
+    if value.startswith("#"):
+        value = value[1:]
+
+    value = value.strip()
+
+    return value or None
+
+
 def extract_people(
     value: Any,
     entities: dict[str, dict[str, Any]],
@@ -226,7 +315,7 @@ def extract_people(
                 {
                     "id": None,
                     "type": None,
-                    "name": entity,
+                    "name": (entity.get("name") or fallback_name_from_id(entity)),
                     "identifier": None,
                     "orcid": None,
                     "url": None,
@@ -266,6 +355,72 @@ def extract_people(
         )
 
     return deduplicate_terms(people)
+
+
+def extract_organizations(
+    main: dict,
+    root: dict,
+    entities: dict[str, dict],
+) -> list[dict]:
+    """
+    Extract organizations associated with the software/tool.
+
+    Uses extract_organization() to normalize each organization
+    reference.
+    """
+
+    values = []
+
+    for entity in (main, root):
+        for property_name in (
+            "producer",
+            "publisher",
+            "provider",
+            "affiliation",
+        ):
+            values.extend(as_list(entity.get(property_name)))
+
+    organizations = []
+
+    for value in values:
+        organization = extract_organization(
+            value,
+            entities,
+        )
+
+        if organization:
+            organizations.append(organization)
+
+    return deduplicate_terms(organizations)
+
+
+def extract_organization(
+    value,
+    entities: dict[str, dict],
+) -> dict | None:
+    if not value:
+        return None
+
+    entity = resolve(value, entities)
+
+    if not isinstance(entity, dict):
+        return None
+
+    types = as_list(entity.get("@type"))
+
+    if "Organization" not in types:
+        return None
+
+    url = entity.get("url")
+
+    if isinstance(url, dict):
+        url = entity_value(url, entities)
+
+    return {
+        "id": entity.get("@id"),
+        "name": entity.get("name"),
+        "url": url,
+    }
 
 
 def extract_terms(
@@ -713,6 +868,11 @@ def extract_ro_crate_metadata(
         "authors": extract_people(
             authors,
             entities,
+        ),
+        "organizations": extract_organizations(
+            main=main,
+            root=root,
+            entities=entities,
         ),
         # RDF/schema types of the actual software entity
         "types": [

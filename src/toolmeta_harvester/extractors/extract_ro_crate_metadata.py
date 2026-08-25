@@ -706,6 +706,63 @@ def extract_runtime_platforms(
     )
 
 
+def extract_io_entities(
+    value,
+    entities: dict[str, dict],
+) -> list[dict]:
+    """
+    Extract declared workflow/tool inputs or outputs.
+
+    Typical result:
+
+        {
+            "id": "#input1",
+            "name": "Input reads",
+            "description": "FASTQ reads to analyse",
+            "type": ["FormalParameter"],
+            "additional_type": "File",
+            "encoding_format": "application/fastq"
+        }
+    """
+
+    results = []
+
+    for item in as_list(value):
+        entity = resolve(item, entities)
+
+        if isinstance(entity, str):
+            results.append(
+                {
+                    "id": None,
+                    "name": entity,
+                    "description": None,
+                    "type": [],
+                    "additional_type": None,
+                    "encoding_format": None,
+                }
+            )
+            continue
+
+        if not isinstance(entity, dict):
+            continue
+
+        results.append(
+            {
+                "id": entity.get("@id"),
+                "name": entity.get("name"),
+                "description": clean_description(entity.get("description")),
+                "type": as_list(entity.get("@type")),
+                "additional_type": entity_value(
+                    entity.get("additionalType"),
+                    entities,
+                ),
+                "encoding_format": entity.get("encodingFormat"),
+            }
+        )
+
+    return deduplicate_terms(results)
+
+
 def extract_software_requirements(
     main: dict[str, Any],
     entities: dict[str, dict[str, Any]],
@@ -908,6 +965,14 @@ def extract_ro_crate_metadata(
         ),
         "produces_data": extract_produces_data(
             main,
+            entities,
+        ),
+        "inputs": extract_io_entities(
+            main.get("input"),
+            entities,
+        ),
+        "outputs": extract_io_entities(
+            main.get("output"),
             entities,
         ),
         # Dates

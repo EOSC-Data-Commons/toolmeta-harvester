@@ -169,6 +169,14 @@ def create_tool_metadata(
             "produces_data",
             [],
         ),
+        inputs=metadata.get(
+            "inputs",
+            [],
+        ),
+        outputs=metadata.get(
+            "outputs",
+            [],
+        ),
         # ---------------------------------------------------------
         # Dates
         # ---------------------------------------------------------

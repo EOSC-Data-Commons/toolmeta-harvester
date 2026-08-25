@@ -219,6 +219,22 @@ class ToolMetadata(Base):
     )
 
     # -------------------------------------------------------------
+    # RO-Crate inputs/outputs
+    # -------------------------------------------------------------
+
+    inputs: Mapped[list[dict]] = mapped_column(
+        JSONB,
+        default=list,
+        nullable=False,
+    )
+
+    outputs: Mapped[list[dict]] = mapped_column(
+        JSONB,
+        default=list,
+        nullable=False,
+    )
+
+    # -------------------------------------------------------------
     # Source preservation
     # -------------------------------------------------------------
 

@@ -1,7 +1,7 @@
 [database]
 host = "localhost"
 port = 5432
-name = "admin"
+name = "tooldb"
 user = "harvester"
 password = "yoursecretsecret"
 

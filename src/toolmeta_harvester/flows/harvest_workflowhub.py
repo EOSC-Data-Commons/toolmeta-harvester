@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import logging
+import requests
 from pathlib import Path
 from datetime import datetime
+from urllib.parse import parse_qs, urlparse
 
-from sqlalchemy import select
+from sqlalchemy import select, insert
 from sqlalchemy.orm import Session
 
 from toolmeta_harvester.db.engine import engine
@@ -20,6 +22,7 @@ from toolmeta_harvester.quality.metadata_quality import (
     assess_metadata_quality,
 )
 from toolmeta_harvester.tasks.workflowhub_rocrate import (
+    WORKFLOW_HUB_API,
     download_rocrate,
     get_hub_workflows,
     get_latest_workflow_version_id,
@@ -61,23 +64,51 @@ def parse_datetime(value):
         return None
 
 
-# def get_version(metadata: dict, workflow: dict) -> str | None:
-#     """
-#     Get the version of the workflow from the metadata or the workflow object.
-#     """
-#
-#     version = metadata.get("version")
-#
-#     if version:
-#         return str(version).strip()
-#
-#     version_obj = get_latest_workflow_version(workflow)
-#
-#     if version_obj:
-#         return str(version_obj.get("name")).strip()
-#
-#     return None
-#
+def upsert_tool_metadata(
+    session: Session,
+    record: ToolMetadata,
+) -> None:
+    """
+    Insert a new source record or replace its harvested metadata
+    when the WorkflowHub version has changed.
+
+    Database identity:
+        source_url + source_identifier
+    """
+
+    values = {
+        column.name: getattr(
+            record,
+            column.name,
+        )
+        for column in ToolMetadata.__table__.columns
+        if column.name != "id"
+    }
+
+    stmt = insert(ToolMetadata).values(**values)
+
+    excluded = stmt.excluded
+
+    update_values = {
+        column.name: getattr(
+            excluded,
+            column.name,
+        )
+        for column in ToolMetadata.__table__.columns
+        if column.name
+        not in {
+            "id",
+            "source_url",
+            "source_identifier",
+        }
+    }
+
+    stmt = stmt.on_conflict_do_update(
+        constraint="uq_tool_metadata_source",
+        set_=update_values,
+    )
+
+    session.execute(stmt)
 
 
 def create_tool_metadata(
@@ -192,19 +223,254 @@ def create_tool_metadata(
 
 def get_harvested_versions(
     session: Session,
-) -> set[tuple[str, str]]:
+) -> dict[tuple[str, str], str]:
     rows = session.execute(
         select(
+            ToolMetadata.source_url,
             ToolMetadata.source_identifier,
             ToolMetadata.version,
         ).where(ToolMetadata.metadata_format == "ro-crate")
     )
 
     return {
-        (str(source_id), str(version))
-        for source_id, version in rows
-        if source_id is not None and version is not None
+        (
+            str(source_url).strip(),
+            str(source_identifier).strip(),
+        ): str(version).strip()
+        for source_url, source_identifier, version in rows
+        if source_url is not None
+        and source_identifier is not None
+        and version is not None
     }
+
+
+# def get_harvested_versions(
+#     session: Session,
+# ) -> set[tuple[str, str]]:
+#     rows = session.execute(
+#         select(
+#             ToolMetadata.source_identifier,
+#             ToolMetadata.version,
+#         ).where(ToolMetadata.metadata_format == "ro-crate")
+#     )
+#
+#     return {
+#         (str(source_id), str(version))
+#         for source_id, version in rows
+#         if source_id is not None and version is not None
+#     }
+#
+def harvest_workflow(
+    session: Session,
+    workflow: dict,
+    harvest_run_id,
+    harvested: dict[tuple[str, str], str] | None = None,
+) -> bool:
+    """
+    Harvest one WorkflowHub workflow.
+
+    Returns True when a record was inserted or updated.
+    Returns False when the current version was already harvested.
+    """
+
+    workflow_id = str(workflow.get("id")).strip()
+
+    source_url = str(workflow.get("url")).strip()
+
+    version = get_latest_workflow_version_id(workflow)
+
+    if version is None:
+        logger.warning(
+            "Workflow %s has no versions",
+            workflow_id,
+        )
+        return False
+
+    version = str(version).strip()
+
+    key = (
+        source_url,
+        workflow_id,
+    )
+
+    if harvested is not None:
+        existing_version = harvested.get(key)
+
+        if existing_version == version:
+            logger.info(
+                "Skipping WorkflowHub workflow %s version %s: already current",
+                workflow_id,
+                version,
+            )
+            return False
+
+        if existing_version is None:
+            logger.info(
+                "Harvesting new WorkflowHub workflow %s version %s",
+                workflow_id,
+                version,
+            )
+        else:
+            logger.info(
+                "Updating WorkflowHub workflow %s from version %s to %s",
+                workflow_id,
+                existing_version,
+                version,
+            )
+
+    crate = download_rocrate(workflow)
+
+    tool_metadata = create_tool_metadata(
+        workflow=workflow,
+        crate=crate,
+        harvest_run_id=harvest_run_id,
+    )
+
+    upsert_tool_metadata(
+        session,
+        tool_metadata,
+    )
+
+    session.commit()
+
+    if harvested is not None:
+        harvested[key] = version
+
+    logger.info(
+        "Stored metadata for WorkflowHub workflow %s: %s",
+        workflow_id,
+        tool_metadata.title,
+    )
+
+    return True
+
+
+def parse_workflowhub_url(
+    url: str,
+) -> tuple[str, str | None]:
+    parsed = urlparse(url)
+
+    parts = [part for part in parsed.path.split("/") if part]
+
+    try:
+        workflows_index = parts.index("workflows")
+        workflow_id = parts[workflows_index + 1]
+    except (ValueError, IndexError):
+        raise ValueError(f"Invalid WorkflowHub workflow URL: {url}")
+
+    query = parse_qs(parsed.query)
+
+    requested_version = query.get(
+        "version",
+        [None],
+    )[0]
+
+    return workflow_id, requested_version
+
+
+def get_workflow(
+    workflow_id: str,
+) -> dict:
+    url = f"{WORKFLOW_HUB_API}/tools/{workflow_id}"
+
+    response = requests.get(
+        url,
+        timeout=30,
+        headers={
+            "Accept": "application/json",
+        },
+    )
+
+    response.raise_for_status()
+
+    return response.json()
+
+
+def pipeline_harvest_single_workflowhub(
+    workflow_url: str,
+) -> ToolHarvestRun:
+    Base.metadata.create_all(engine)
+
+    workflow_id, requested_version = parse_workflowhub_url(workflow_url)
+
+    workflow = get_workflow(workflow_id)
+
+    # If a specific version was requested, make that version
+    # appear as the latest version used by the existing helper
+    # functions.
+    if requested_version is not None:
+        versions = workflow.get(
+            "versions",
+            [],
+        )
+
+        matching = [
+            version
+            for version in versions
+            if str(version.get("id")) == str(requested_version)
+            or str(version.get("name")) == str(requested_version)
+        ]
+
+        if not matching:
+            raise ValueError(
+                f"Workflow {workflow_id} has no version {requested_version}"
+            )
+
+        workflow = dict(workflow)
+        workflow["versions"] = matching
+
+    with Session(engine) as session:
+        harvested = get_harvested_versions(session)
+
+        harvest_run = ToolHarvestRun(
+            source="workflowhub",
+            source_url="https://workflowhub.eu",
+            status="running",
+        )
+
+        session.add(harvest_run)
+        session.commit()
+        session.refresh(harvest_run)
+
+        try:
+            changed = harvest_workflow(
+                session=session,
+                workflow=workflow,
+                harvest_run_id=harvest_run.id,
+                harvested=harvested,
+            )
+
+            harvest_run = session.get(
+                ToolHarvestRun,
+                harvest_run.id,
+            )
+
+            harvest_run.harvested_count = 1 if changed else 0
+            harvest_run.failed_count = 0
+            harvest_run.finished_at = datetime.now().astimezone()
+            harvest_run.status = "completed"
+
+            session.commit()
+            session.refresh(harvest_run)
+
+            return harvest_run
+
+        except Exception:
+            session.rollback()
+
+            harvest_run = session.get(
+                ToolHarvestRun,
+                harvest_run.id,
+            )
+
+            harvest_run.harvested_count = 0
+            harvest_run.failed_count = 1
+            harvest_run.finished_at = datetime.now().astimezone()
+            harvest_run.status = "failed"
+
+            session.commit()
+
+            raise
 
 
 def pipeline_harvest_workflowhub(
@@ -240,71 +506,18 @@ def pipeline_harvest_workflowhub(
 
         harvest_run_id = harvest_run.id
 
-        # logger.info(
-        #     "Started WorkflowHub harvest %s",
-        #     harvest_run_id,
-        # )
-
         try:
             for workflow in workflows:
-                workflow_id = str(workflow.get("id")).strip()
-                version = get_latest_workflow_version_id(workflow)
-
-                if not version:
-                    logger.warning(
-                        "Workflow %s has no versions",
-                        workflow_id,
-                    )
-                    continue
-
-                # version_name = str(version.get("name")).strip()
-
-                key = (
-                    workflow_id,
-                    version,
-                )
-
-                if key in harvested:
-                    logger.info(
-                        "Skipping WorkflowHub workflow %s "
-                        "version %s: already harvested",
-                        workflow_id,
-                        version,
-                    )
-                    continue
-                else:
-                    logger.info(
-                        "Harvesting WorkflowHub workflow %s version %s",
-                        workflow_id,
-                        version,
-                    )
-
                 try:
-                    logger.info(
-                        "Harvesting WorkflowHub workflow %s",
-                        workflow_id,
-                    )
-
-                    crate = download_rocrate(workflow)
-
-                    tool_metadata = create_tool_metadata(
+                    changed = harvest_workflow(
+                        session=session,
                         workflow=workflow,
-                        crate=crate,
                         harvest_run_id=harvest_run_id,
+                        harvested=harvested,
                     )
 
-                    session.add(tool_metadata)
-                    session.commit()
-
-                    harvested.add(key)
-
-                    harvested_count += 1
-
-                    logger.info(
-                        "Stored metadata for WorkflowHub workflow %s: %s",
-                        workflow_id,
-                        tool_metadata.title,
-                    )
+                    if changed:
+                        harvested_count += 1
 
                 except Exception:
                     session.rollback()
@@ -313,8 +526,84 @@ def pipeline_harvest_workflowhub(
 
                     logger.exception(
                         "Failed to harvest WorkflowHub workflow %s",
-                        workflow_id,
+                        workflow.get("id"),
                     )
+
+            # try:
+            #     for workflow in workflows:
+            #         workflow_id = str(workflow.get("id")).strip()
+            #         version = get_latest_workflow_version_id(workflow)
+            #
+            #         if not version:
+            #             logger.warning(
+            #                 "Workflow %s has no versions",
+            #                 workflow_id,
+            #             )
+            #             continue
+            #
+            #         # version_name = str(version.get("name")).strip()
+            #
+            #         key = (
+            #             workflow_id,
+            #             version,
+            #         )
+            #
+            #         if key in harvested:
+            #             logger.info(
+            #                 "Skipping WorkflowHub workflow %s "
+            #                 "version %s: already harvested",
+            #                 workflow_id,
+            #                 version,
+            #             )
+            #             continue
+            #         else:
+            #             logger.info(
+            #                 "Harvesting WorkflowHub workflow %s version %s",
+            #                 workflow_id,
+            #                 version,
+            #             )
+            #
+            #         try:
+            #             logger.info(
+            #                 "Harvesting WorkflowHub workflow %s",
+            #                 workflow_id,
+            #             )
+            #
+            #             crate = download_rocrate(workflow)
+            #
+            #             tool_metadata = create_tool_metadata(
+            #                 workflow=workflow,
+            #                 crate=crate,
+            #                 harvest_run_id=harvest_run_id,
+            #             )
+            #
+            #             # session.add(tool_metadata)
+            #             upsert_tool_metadata(
+            #                 session=session,
+            #                 record=tool_metadata,
+            #             )
+            #
+            #             session.commit()
+            #
+            #             harvested.add(key)
+            #
+            #             harvested_count += 1
+            #
+            #             logger.info(
+            #                 "Stored metadata for WorkflowHub workflow %s: %s",
+            #                 workflow_id,
+            #                 tool_metadata.title,
+            #             )
+            #
+            #         except Exception:
+            #             session.rollback()
+            #
+            #             failed_count += 1
+            #
+            #             logger.exception(
+            #                 "Failed to harvest WorkflowHub workflow %s",
+            #                 workflow_id,
+            #             )
 
             harvest_run = session.get(
                 ToolHarvestRun,
@@ -362,21 +651,35 @@ def pipeline_harvest_workflowhub(
 
 
 def main():
-    pipeline_harvest_workflowhub()
-    # Base.metadata.create_all(engine)
-    #
-    # # workflows = get_hub_workflows(use_cache=use_cache)
-    # with Session(engine) as session:
-    #     harvested_versions = get_harvested_versions(session)
-    #     # print(harvested_versions)
-    #     if ("2", "1") in harvested_versions:
-    #         logger.info(
-    #             "WorkflowHub workflow 1741 version 1 has already been harvested."
-    #         )
-    #     else:
-    #         logger.info(
-    #             "WorkflowHub workflow 1741 version 1 has not been harvested yet."
-    #         )
+    import argparse
+
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        "url",
+        nargs="?",
+        help=("Optional WorkflowHub workflow URL. If omitted, harvest all workflows."),
+    )
+
+    parser.add_argument(
+        "--limit",
+        type=int,
+    )
+
+    parser.add_argument(
+        "--no-cache",
+        action="store_true",
+    )
+
+    args = parser.parse_args()
+
+    if args.url:
+        pipeline_harvest_single_workflowhub(args.url)
+    else:
+        pipeline_harvest_workflowhub(
+            limit=args.limit,
+            use_cache=not args.no_cache,
+        )
 
 
 if __name__ == "__main__":

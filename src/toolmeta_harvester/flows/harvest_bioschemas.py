@@ -241,6 +241,36 @@ def upsert_tool_metadata(
     session.execute(stmt)
 
 
+def get_biotools_id_from_url(url: str) -> str:
+    """
+    Extract the bio.tools ID from a URL.
+    """
+
+    if not url.startswith("https://bio.tools/"):
+        raise ValueError(
+            f"Invalid bio.tools URL: {url}",
+        )
+
+    return url.split("/")[-1]
+
+
+def pipeline_harvest_biotools_url(
+    url: str,
+    harvest_run_id,
+) -> ToolMetadata:
+    """
+    Run the complete pipeline for one bio.tools record.
+    """
+
+    biotools_id = get_biotools_id_from_url(url)
+
+    return harvest_biotools_record(
+        session=Session(engine),
+        biotools_id=(biotools_id),
+        harvest_run_id=(harvest_run_id),
+    )
+
+
 def harvest_biotools_record(
     session: Session,
     biotools_id: str,

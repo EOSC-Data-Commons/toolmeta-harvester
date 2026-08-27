@@ -21,8 +21,8 @@ from toolmeta_harvester.extractors.extract_ro_crate_metadata import (
 from toolmeta_harvester.quality.metadata_quality import (
     assess_metadata_quality,
 )
-from toolmeta_harvester.tasks.zenodo_rocrate import (
-    download_zenodo_rocrate,
+from toolmeta_harvester.tasks.zenodo_jsonld import (
+    download_zenodo_jsonld,
     get_zenodo_record,
     parse_zenodo_url,
 )
@@ -252,7 +252,7 @@ def pipeline_harvest_zenodo(
                 record_id,
             )
 
-            crate, metadata_url = download_zenodo_rocrate(record)
+            crate, metadata_url = download_zenodo_jsonld(record)
 
             # -------------------------------------------------
             # Tool acceptance gate

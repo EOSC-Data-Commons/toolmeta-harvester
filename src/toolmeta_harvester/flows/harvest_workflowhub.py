@@ -386,7 +386,7 @@ def get_workflow(
     return response.json()
 
 
-def pipeline_harvest_single_workflowhub(
+def pipeline_harvest_workflowhub_url(
     workflow_url: str,
 ) -> ToolHarvestRun:
     Base.metadata.create_all(engine)
@@ -674,7 +674,7 @@ def main():
     args = parser.parse_args()
 
     if args.url:
-        pipeline_harvest_single_workflowhub(args.url)
+        pipeline_harvest_workflowhub_url(args.url)
     else:
         pipeline_harvest_workflowhub(
             limit=args.limit,

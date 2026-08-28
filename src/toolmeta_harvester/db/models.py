@@ -1,25 +1,3 @@
-# from sqlalchemy import (
-#     Column,
-#     Integer,
-#     DateTime,
-#     Identity,
-#     String,
-#     func,
-# )
-#
-# from toolmeta_models import Base
-# import string
-# import secrets
-#
-#
-# def generate_alphanum_id(length=9):
-#     chars = string.ascii_lowercase + string.digits
-#     return "".join(secrets.choice(chars) for _ in range(length))
-#
-#
-# def generate_tool_id():
-#     return f"edc:tool:{generate_alphanum_id()}"
-
 from __future__ import annotations
 
 import uuid
@@ -37,6 +15,15 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class HarvestResult:
+    pipeline_tag: str
+    tool_ids: list[uuid.UUID]
+    harvested_count: int
+    failed_count: int = 0
 
 
 class Base(DeclarativeBase):
@@ -86,7 +73,7 @@ class ToolHarvestRun(Base):
         nullable=False,
     )
 
-    records: Mapped[list["ToolMetadata"]] = relationship(back_populates="harvest_run")
+    # records: Mapped[list["ToolMetadata"]] = relationship(back_populates="harvest_run")
 
 
 class ToolMetadata(Base):
@@ -98,14 +85,14 @@ class ToolMetadata(Base):
         default=uuid.uuid4,
     )
 
-    harvest_run_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey(
-            "tool_harvest_run.id",
-            ondelete="CASCADE",
-        ),
-        nullable=False,
-    )
-
+    # harvest_run_id: Mapped[uuid.UUID] = mapped_column(
+    #     ForeignKey(
+    #         "tool_harvest_run.id",
+    #         ondelete="CASCADE",
+    #     ),
+    #     nullable=False,
+    # )
+    #
     quality_score: Mapped[float | None] = mapped_column(
         Float,
     )
@@ -249,7 +236,9 @@ class ToolMetadata(Base):
         nullable=False,
     )
 
-    harvest_run: Mapped["ToolHarvestRun"] = relationship(back_populates="records")
+    pipeline_tag: Mapped[str | None] = mapped_column(String(100))
+
+    # harvest_run: Mapped["ToolHarvestRun"] = relationship(back_populates="records")
 
     date_created: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 

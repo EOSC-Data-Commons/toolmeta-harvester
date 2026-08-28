@@ -12,8 +12,8 @@ from sqlalchemy.orm import Session
 from toolmeta_harvester.db.engine import engine
 from toolmeta_harvester.db.models import (
     Base,
-    ToolHarvestRun,
     ToolMetadata,
+    HarvestResult,
 )
 from toolmeta_harvester.extractors.jsonld import (
     jsonld_defines_tool,
@@ -30,6 +30,11 @@ from toolmeta_harvester.tasks.zenodo_jsonld import (
     parse_zenodo_url,
 )
 
+PIPELINE_VERSION = "0.1.0"
+
+PIPELINE_TAG = (
+    f"{__name__.rsplit('.', 1)[-1].removeprefix('harvest_')}@{PIPELINE_VERSION}"
+)
 
 LOG_FILE = Path("logs/harvest_zenodo.log")
 
@@ -150,7 +155,7 @@ def create_tool_metadata(
     record: dict,
     raw_metadata: dict,
     metadata_url: str,
-    harvest_run_id,
+    pipeline_tag: str = PIPELINE_TAG,
 ) -> ToolMetadata:
     """
     Convert Zenodo JSON-LD into the canonical ToolMetadata model.
@@ -170,11 +175,11 @@ def create_tool_metadata(
         version = str(version)
 
     return ToolMetadata(
-        harvest_run_id=(harvest_run_id),
         quality_score=(quality.score),
         # -----------------------------------------------------
         # Provenance
         # -----------------------------------------------------
+        pipeline_tag=(pipeline_tag),
         source_identifier=(record_id),
         source_url=(source_url),
         metadata_url=(metadata_url),
@@ -266,7 +271,7 @@ def create_tool_metadata(
 
 def pipeline_harvest_zenodo(
     zenodo_url: str,
-) -> ToolHarvestRun:
+) -> HarvestResult:
     """
     Harvest one Zenodo record using its JSON-LD export.
 
@@ -299,20 +304,6 @@ def pipeline_harvest_zenodo(
         engine,
         expire_on_commit=False,
     ) as session:
-        harvest_run = ToolHarvestRun(
-            source="zenodo",
-            source_url=("https://zenodo.org"),
-            status="running",
-        )
-
-        session.add(harvest_run)
-
-        session.commit()
-
-        session.refresh(harvest_run)
-
-        harvest_run_id = harvest_run.id
-
         try:
             logger.info(
                 "Retrieving JSON-LD from Zenodo record %s",
@@ -336,20 +327,6 @@ def pipeline_harvest_zenodo(
                     record_id,
                 )
 
-                harvest_run = session.get(
-                    ToolHarvestRun,
-                    harvest_run_id,
-                )
-
-                harvest_run.harvested_count = 0
-                harvest_run.failed_count = 0
-                harvest_run.status = "completed"
-                harvest_run.finished_at = datetime.now().astimezone()
-
-                session.commit()
-
-                return harvest_run
-
             # -------------------------------------------------
             # Extract / quality / persist
             # -------------------------------------------------
@@ -358,23 +335,13 @@ def pipeline_harvest_zenodo(
                 record=record,
                 raw_metadata=(raw_metadata),
                 metadata_url=(metadata_url),
-                harvest_run_id=(harvest_run_id),
+                pipeline_tag=(PIPELINE_TAG),
             )
 
             upsert_tool_metadata(
                 session,
                 tool_metadata,
             )
-
-            harvest_run = session.get(
-                ToolHarvestRun,
-                harvest_run_id,
-            )
-
-            harvest_run.harvested_count = 1
-            harvest_run.failed_count = 0
-            harvest_run.status = "completed"
-            harvest_run.finished_at = datetime.now().astimezone()
 
             session.commit()
 
@@ -385,22 +352,14 @@ def pipeline_harvest_zenodo(
                 tool_metadata.quality_score,
             )
 
-            return harvest_run
+            return HarvestResult(
+                pipeline_tag=PIPELINE_TAG,
+                tool_ids=[record_id],
+                harvested_count=1,
+            )
 
         except Exception:
             session.rollback()
-
-            harvest_run = session.get(
-                ToolHarvestRun,
-                harvest_run_id,
-            )
-
-            harvest_run.harvested_count = 0
-            harvest_run.failed_count = 1
-            harvest_run.status = "failed"
-            harvest_run.finished_at = datetime.now().astimezone()
-
-            session.commit()
 
             logger.exception(
                 "Failed to harvest Zenodo record %s",

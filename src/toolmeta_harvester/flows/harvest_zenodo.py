@@ -353,9 +353,7 @@ def pipeline_harvest_zenodo(
             )
 
             return HarvestResult(
-                pipeline_tag=PIPELINE_TAG,
-                tool_ids=[record_id],
-                harvested_count=1,
+                pipeline_tag=PIPELINE_TAG, record_ids=[record_id], failed_record_ids=[]
             )
 
         except Exception:

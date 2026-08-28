@@ -21,9 +21,16 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class HarvestResult:
     pipeline_tag: str
-    tool_ids: list[uuid.UUID]
-    harvested_count: int
-    failed_count: int = 0
+    record_ids: list[str]
+    failed_record_ids: list[str]
+
+    @property
+    def harvested_count(self) -> int:
+        return len(self.record_ids)
+
+    @property
+    def failed_count(self) -> int:
+        return len(self.failures)
 
 
 class Base(DeclarativeBase):

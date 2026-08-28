@@ -30,7 +30,7 @@ class HarvestResult:
 
     @property
     def failed_count(self) -> int:
-        return len(self.failures)
+        return len(self.failed_record_ids)
 
 
 class Base(DeclarativeBase):

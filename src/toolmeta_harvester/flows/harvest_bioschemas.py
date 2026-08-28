@@ -315,7 +315,10 @@ def pipeline_harvest_biotools(
     harvested_count = 0
     failed_count = 0
 
-    with Session(engine) as session:
+    with Session(
+        engine,
+        expire_on_commit=False,
+    ) as session:
         harvest_run = ToolHarvestRun(
             source="bio.tools",
             source_url=("https://bio.tools"),

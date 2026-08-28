@@ -419,7 +419,10 @@ def pipeline_harvest_workflowhub_url(
         workflow = dict(workflow)
         workflow["versions"] = matching
 
-    with Session(engine) as session:
+    with Session(
+        engine,
+        expire_on_commit=False,
+    ) as session:
         harvested = get_harvested_versions(session)
 
         harvest_run = ToolHarvestRun(
@@ -492,7 +495,10 @@ def pipeline_harvest_workflowhub(
     harvested_count = 0
     failed_count = 0
 
-    with Session(engine) as session:
+    with Session(
+        engine,
+        expire_on_commit=False,
+    ) as session:
         harvested = get_harvested_versions(session)
         harvest_run = ToolHarvestRun(
             source="workflowhub",

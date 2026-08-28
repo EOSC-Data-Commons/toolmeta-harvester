@@ -38,6 +38,7 @@ from toolmeta_harvester.tasks.github import (
 
 logger = logging.getLogger(__name__)
 
+
 def parse_datetime(value):
     if not value:
         return None
@@ -49,6 +50,7 @@ def parse_datetime(value):
         logger.warning("Unable to parse datetime %r", value)
         return None
 
+
 def _canonical_version(metadata: dict) -> str | None:
     value = metadata.get("version")
     if value is None:
@@ -56,6 +58,7 @@ def _canonical_version(metadata: dict) -> str | None:
     if isinstance(value, list):
         return ", ".join(str(v) for v in value)
     return str(value)
+
 
 def create_tool_metadata(
     *,
@@ -101,6 +104,7 @@ def create_tool_metadata(
         raw_metadata=source_metadata,
     )
 
+
 def upsert_tool_metadata(session: Session, record: ToolMetadata) -> None:
     excluded_from_insert = {"id", "harvested_at"}
     values = {
@@ -128,6 +132,7 @@ def upsert_tool_metadata(session: Session, record: ToolMetadata) -> None:
     )
     session.execute(stmt)
 
+
 def _build_fallback_metadata(
     *,
     owner: str,
@@ -146,9 +151,7 @@ def _build_fallback_metadata(
     )
     raw_files: dict[str, str] = {}
 
-    package_text = get_file_text(
-        owner, repo, "package.json", ref=branch, token=token
-    )
+    package_text = get_file_text(owner, repo, "package.json", ref=branch, token=token)
     if package_text is not None:
         try:
             generated = merge_jsonld(
@@ -172,9 +175,7 @@ def _build_fallback_metadata(
         except Exception:
             logger.exception("Unable to convert pyproject.toml")
 
-    citation_text = get_file_text(
-        owner, repo, "CITATION.cff", ref=branch, token=token
-    )
+    citation_text = get_file_text(owner, repo, "CITATION.cff", ref=branch, token=token)
     if citation_text is not None:
         try:
             generated = merge_jsonld(
@@ -195,6 +196,7 @@ def _build_fallback_metadata(
 
     return generated, raw_source, repository.get("url")
 
+
 def pipeline_harvest_github(
     repository_url: str,
     *,
@@ -207,7 +209,10 @@ def pipeline_harvest_github(
     repository = get_repository(owner, repo, token=token)
     branch = repository.get("default_branch")
 
-    with Session(engine) as session:
+    with Session(
+        engine,
+        expire_on_commit=False,
+    ) as session:
         harvest_run = ToolHarvestRun(
             source="github",
             source_url="https://github.com",
@@ -285,6 +290,7 @@ def pipeline_harvest_github(
             logger.exception("Failed to harvest GitHub repository %s/%s", owner, repo)
             raise
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="Harvest one GitHub repository into ScienceToolMeta"
@@ -297,6 +303,7 @@ def main():
         args.url,
         token=args.token,
     )
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)

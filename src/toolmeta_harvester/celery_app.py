@@ -16,4 +16,14 @@ celery_app = Celery(
     ),
 )
 
+celery_app.conf.update(
+    task_serializer="json",
+    result_serializer="json",
+    accept_content=["json"],
+    control_queue_durable=False,
+    control_queue_exclusive=True,
+    event_queue_durable=False,
+    event_queue_exclusive=True,
+)
+
 celery_app.conf.imports = ("toolmeta_harvester.celery_tasks",)

@@ -6,7 +6,7 @@ from pathlib import Path
 from datetime import datetime
 from urllib.parse import parse_qs, urlparse
 
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -84,6 +84,10 @@ def upsert_tool_metadata(
     Database identity:
         source_url + source_identifier
     """
+    excluded_from_insert = {
+        "id",
+        "harvested_at",
+    }
 
     values = {
         column.name: getattr(
@@ -91,7 +95,7 @@ def upsert_tool_metadata(
             column.name,
         )
         for column in ToolMetadata.__table__.columns
-        if column.name != "id"
+        if column.name not in excluded_from_insert
     }
 
     stmt = insert(ToolMetadata).values(**values)
@@ -109,8 +113,12 @@ def upsert_tool_metadata(
             "id",
             "source_url",
             "source_identifier",
+            "harvested_at",
         }
     }
+
+    # A re-harvest should refresh the timestamp.
+    update_values["harvested_at"] = func.now()
 
     stmt = stmt.on_conflict_do_update(
         constraint="uq_tool_metadata_source",

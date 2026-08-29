@@ -396,6 +396,7 @@ def get_workflow(
 
 @dynamic_harvest(
     name="workflowhub",
+    hosts=["workflowhub.eu"],
     default_schedule="0 3 * * *",
 )
 def pipeline_harvest_workflowhub_url(

@@ -273,6 +273,7 @@ def create_tool_metadata(
 
 @dynamic_harvest(
     name="zenodo",
+    hosts=["zenodo.org"],
     default_schedule="0 3 * * *",
 )
 def pipeline_harvest_zenodo(

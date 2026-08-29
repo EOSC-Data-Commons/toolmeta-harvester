@@ -10,6 +10,7 @@ from toolmeta_harvester.flows.registry import (
 def dynamic_harvest(
     *,
     name: str,
+    hosts: list[str],
     default_schedule: str | None = None,
 ):
     def decorator(func: Callable[..., Any]):
@@ -19,6 +20,7 @@ def dynamic_harvest(
                 kind="dynamic",
                 handler=func,
                 default_schedule=default_schedule,
+                hosts=tuple(hosts),
             )
         )
 

@@ -211,6 +211,7 @@ def _build_fallback_metadata(
 
 @dynamic_harvest(
     name="github",
+    hosts=["github.com"],
     default_schedule="0 3 * * *",
 )
 def pipeline_harvest_github(

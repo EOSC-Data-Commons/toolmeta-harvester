@@ -12,6 +12,7 @@ class HarvestFlow:
     kind: HarvestKind
     handler: Callable[..., Any]
     default_schedule: str | None = None
+    hosts: tuple[str, ...] = ()
 
 
 _registry: dict[str, HarvestFlow] = {}

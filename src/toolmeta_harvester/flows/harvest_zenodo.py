@@ -29,6 +29,8 @@ from toolmeta_harvester.tasks.zenodo_jsonld import (
     get_zenodo_record,
     parse_zenodo_url,
 )
+from toolmeta_harvester.flows.decorators import dynamic_harvest
+
 
 PIPELINE_VERSION = "0.1.0"
 
@@ -269,6 +271,10 @@ def create_tool_metadata(
     )
 
 
+@dynamic_harvest(
+    name="zenodo",
+    default_schedule="0 3 * * *",
+)
 def pipeline_harvest_zenodo(
     zenodo_url: str,
 ) -> HarvestResult:

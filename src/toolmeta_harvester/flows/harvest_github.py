@@ -23,7 +23,12 @@ from toolmeta_harvester.converters.pyproject_jsonld import (
     convert_pyproject_to_jsonld,
 )
 from toolmeta_harvester.db.engine import engine
-from toolmeta_harvester.db.models import Base, ToolHarvestRun, ToolMetadata
+from toolmeta_harvester.db.models import (
+    Base,
+    ToolMetadata,
+    HarvestResult,
+    ToolHarvestRun,
+)
 from toolmeta_harvester.extractors.tool_metadata import extract_tool_metadata
 from toolmeta_harvester.quality.metadata_quality import assess_metadata_quality
 from toolmeta_harvester.tasks.github import (
@@ -34,6 +39,13 @@ from toolmeta_harvester.tasks.github import (
     get_readme,
     get_repository,
     parse_github_url,
+)
+from toolmeta_harvester.flows.decorators import dynamic_harvest
+
+PIPELINE_VERSION = "0.1.0"
+
+PIPELINE_TAG = (
+    f"{__name__.rsplit('.', 1)[-1].removeprefix('harvest_')}@{PIPELINE_VERSION}"
 )
 
 logger = logging.getLogger(__name__)
@@ -67,12 +79,12 @@ def create_tool_metadata(
     metadata: dict,
     metadata_url: str,
     metadata_format: str,
-    harvest_run_id,
+    pipeline_tag: str = PIPELINE_TAG,
 ) -> ToolMetadata:
     quality = assess_metadata_quality(metadata)
     return ToolMetadata(
-        harvest_run_id=harvest_run_id,
         quality_score=quality.score,
+        pipeline_tag=pipeline_tag,
         source_identifier=repository.get("full_name"),
         source_url=repository.get("html_url"),
         metadata_url=metadata_url,
@@ -197,11 +209,15 @@ def _build_fallback_metadata(
     return generated, raw_source, repository.get("url")
 
 
+@dynamic_harvest(
+    name="github",
+    default_schedule="0 3 * * *",
+)
 def pipeline_harvest_github(
     repository_url: str,
     *,
     token: str | None = None,
-) -> ToolHarvestRun:
+) -> HarvestResult:
     Base.metadata.create_all(engine)
 
     token = token or os.getenv("GITHUB_TOKEN")
@@ -213,17 +229,8 @@ def pipeline_harvest_github(
         engine,
         expire_on_commit=False,
     ) as session:
-        harvest_run = ToolHarvestRun(
-            source="github",
-            source_url="https://github.com",
-            status="running",
-        )
-        session.add(harvest_run)
-        session.commit()
-        session.refresh(harvest_run)
-        run_id = harvest_run.id
-
         try:
+            record_id = repository.get("full_name")
             codemeta = get_json_file(
                 owner,
                 repo,
@@ -259,17 +266,9 @@ def pipeline_harvest_github(
                 metadata=metadata,
                 metadata_url=metadata_url,
                 metadata_format=metadata_format,
-                harvest_run_id=run_id,
+                pipeline_tag=PIPELINE_TAG,
             )
             upsert_tool_metadata(session, record)
-
-            harvest_run = session.get(ToolHarvestRun, run_id)
-            harvest_run.harvested_count = 1
-            harvest_run.failed_count = 0
-            harvest_run.finished_at = datetime.now().astimezone()
-            harvest_run.status = "completed"
-            session.commit()
-            session.refresh(harvest_run)
 
             logger.info(
                 "Stored GitHub repository %s (format=%s, quality=%.3f)",
@@ -277,17 +276,12 @@ def pipeline_harvest_github(
                 metadata_format,
                 record.quality_score,
             )
-            return harvest_run
+            return HarvestResult(
+                pipeline_tag=PIPELINE_TAG, record_ids=[record_id], failed_record_ids=[]
+            )
 
         except Exception:
             session.rollback()
-            harvest_run = session.get(ToolHarvestRun, run_id)
-            harvest_run.harvested_count = 0
-            harvest_run.failed_count = 1
-            harvest_run.finished_at = datetime.now().astimezone()
-            harvest_run.status = "failed"
-            session.commit()
-            logger.exception("Failed to harvest GitHub repository %s/%s", owner, repo)
             raise
 
 

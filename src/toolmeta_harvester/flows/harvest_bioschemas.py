@@ -18,8 +18,8 @@ from toolmeta_harvester.db.engine import (
 )
 from toolmeta_harvester.db.models import (
     Base,
-    ToolHarvestRun,
     ToolMetadata,
+    HarvestResult,
 )
 from toolmeta_harvester.extractors.tool_metadata import (
     extract_tool_metadata,
@@ -33,6 +33,13 @@ from toolmeta_harvester.tasks.biotools_bioschemas import (
     get_biotools_record,
     get_biotools_source_url,
     iter_biotools,
+)
+from toolmeta_harvester.flows.decorators import dynamic_harvest, static_harvest
+
+PIPELINE_VERSION = "0.1.0"
+
+PIPELINE_TAG = (
+    f"{__name__.rsplit('.', 1)[-1].removeprefix('harvest_')}@{PIPELINE_VERSION}"
 )
 
 
@@ -75,7 +82,7 @@ def create_tool_metadata(
     biotools_id: str,
     raw_biotools: dict,
     metadata: dict,
-    harvest_run_id,
+    pipeline_tag: str = PIPELINE_TAG,
 ) -> ToolMetadata:
     """
     Convert canonical ScienceToolMeta into the SQLAlchemy model.
@@ -92,11 +99,11 @@ def create_tool_metadata(
         version = str(version)
 
     return ToolMetadata(
-        harvest_run_id=(harvest_run_id),
         quality_score=(quality.score),
         # -----------------------------------------------------
         # Provenance
         # -----------------------------------------------------
+        pipeline_tag=(pipeline_tag),
         source_identifier=(biotools_id),
         source_url=(get_biotools_source_url(biotools_id)),
         metadata_url=(get_biotools_metadata_url(biotools_id)),
@@ -254,9 +261,12 @@ def get_biotools_id_from_url(url: str) -> str:
     return url.split("/")[-1]
 
 
+@dynamic_harvest(
+    name="biotools",
+    default_schedule="0 3 * * *",
+)
 def pipeline_harvest_biotools_url(
     url: str,
-    harvest_run_id,
 ) -> ToolMetadata:
     """
     Run the complete pipeline for one bio.tools record.
@@ -267,14 +277,12 @@ def pipeline_harvest_biotools_url(
     return harvest_biotools_record(
         session=Session(engine),
         biotools_id=(biotools_id),
-        harvest_run_id=(harvest_run_id),
     )
 
 
 def harvest_biotools_record(
     session: Session,
     biotools_id: str,
-    harvest_run_id,
 ) -> ToolMetadata:
     """
     Run the complete pipeline for one bio.tools record.
@@ -294,7 +302,7 @@ def harvest_biotools_record(
         biotools_id=(biotools_id),
         raw_biotools=(raw_biotools),
         metadata=metadata,
-        harvest_run_id=(harvest_run_id),
+        pipeline_tag=(PIPELINE_TAG),
     )
 
     # 5. Persistent upsert
@@ -306,32 +314,23 @@ def harvest_biotools_record(
     return tool_metadata
 
 
+@static_harvest(
+    name="biotools_all",
+    default_schedule="0 3 * * *",
+)
 def pipeline_harvest_biotools(
     limit: int | None = None,
     per_page: int = 50,
-) -> ToolHarvestRun:
+) -> HarvestResult:
     Base.metadata.create_all(engine)
 
-    harvested_count = 0
-    failed_count = 0
+    record_ids = []
+    failed_ids = []
 
     with Session(
         engine,
         expire_on_commit=False,
     ) as session:
-        harvest_run = ToolHarvestRun(
-            source="bio.tools",
-            source_url=("https://bio.tools"),
-            status="running",
-        )
-
-        session.add(harvest_run)
-
-        session.commit()
-        session.refresh(harvest_run)
-
-        harvest_run_id = harvest_run.id
-
         try:
             for summary in iter_biotools(
                 limit=limit,
@@ -350,12 +349,12 @@ def pipeline_harvest_biotools(
                     record = harvest_biotools_record(
                         session=session,
                         biotools_id=(biotools_id),
-                        harvest_run_id=(harvest_run_id),
+                        pipeline_tag=(PIPELINE_TAG),
                     )
 
                     session.commit()
 
-                    harvested_count += 1
+                    record_ids.append(biotools_id)
 
                     logger.info(
                         "Stored bio.tools record %s: %s",
@@ -366,59 +365,27 @@ def pipeline_harvest_biotools(
                 except Exception:
                     session.rollback()
 
-                    failed_count += 1
+                    failed_ids.append(biotools_id)
 
                     logger.exception(
                         "Failed to harvest bio.tools record %s",
                         biotools_id,
                     )
 
-            harvest_run = session.get(
-                ToolHarvestRun,
-                harvest_run_id,
-            )
-
-            harvest_run.harvested_count = harvested_count
-
-            harvest_run.failed_count = failed_count
-
-            harvest_run.finished_at = datetime.now().astimezone()
-
-            harvest_run.status = (
-                "completed_with_errors" if failed_count else "completed"
-            )
-
-            session.commit()
-            session.refresh(harvest_run)
-
             logger.info(
                 "bio.tools harvest complete: %d harvested, %d failed",
-                harvested_count,
-                failed_count,
+                len(record_ids),
+                len(failed_ids),
             )
 
-            return harvest_run
+            return HarvestResult(
+                pipeline_tag=PIPELINE_TAG,
+                record_ids=record_ids,
+                failed_record_ids=failed_ids,
+            )
 
         except Exception:
             session.rollback()
-
-            harvest_run = session.get(
-                ToolHarvestRun,
-                harvest_run_id,
-            )
-
-            harvest_run.harvested_count = harvested_count
-
-            harvest_run.failed_count = failed_count
-
-            harvest_run.finished_at = datetime.now().astimezone()
-
-            harvest_run.status = "failed"
-
-            session.commit()
-
-            logger.exception("bio.tools harvest failed")
-
             raise
 
 

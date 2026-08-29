@@ -29,10 +29,16 @@ def get_flow(name: str) -> HarvestFlow:
 
 
 def get_dynamic_flows() -> list[HarvestFlow]:
+    from toolmeta_harvester.flows.loader import load_flows
+
+    load_flows()
     return [flow for flow in _registry.values() if flow.kind == "dynamic"]
 
 
 def get_static_flows() -> list[HarvestFlow]:
+    from toolmeta_harvester.flows.loader import load_flows
+
+    load_flows()
     return [flow for flow in _registry.values() if flow.kind == "static"]
 
 

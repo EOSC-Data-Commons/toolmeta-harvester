@@ -6,13 +6,13 @@ from pathlib import Path
 from datetime import datetime
 from urllib.parse import parse_qs, urlparse
 
-from sqlalchemy import select, insert
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from toolmeta_harvester.db.engine import engine
 from toolmeta_harvester.db.models import (
     Base,
-    ToolHarvestRun,
     ToolMetadata,
     HarvestResult,
 )
@@ -470,7 +470,7 @@ def pipeline_harvest_workflowhub_url(
 def pipeline_harvest_workflowhub(
     limit: int | None = None,
     use_cache: bool = True,
-) -> ToolHarvestRun:
+) -> HarvestResult:
     """
     Harvest WorkflowHub RO-Crates and persist their normalised
     metadata in PostgreSQL.
@@ -511,7 +511,7 @@ def pipeline_harvest_workflowhub(
                         workflow.get("id"),
                     )
 
-            return ToolHarvestRun(
+            return HarvestResult(
                 pipeline_tag=PIPELINE_TAG,
                 record_ids=record_ids,
                 failed_record_ids=failed_record_ids,

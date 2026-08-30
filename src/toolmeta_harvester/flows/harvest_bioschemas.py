@@ -276,14 +276,14 @@ def pipeline_harvest_biotools_url(
     biotools_id = get_biotools_id_from_url(url)
 
     return harvest_biotools_record(
-        session=Session(engine),
-        biotools_id=(biotools_id),
+        session=Session(engine), biotools_id=(biotools_id), pipeline_tag=(PIPELINE_TAG)
     )
 
 
 def harvest_biotools_record(
     session: Session,
     biotools_id: str,
+    pipeline_tag: str = PIPELINE_TAG,
 ) -> ToolMetadata:
     """
     Run the complete pipeline for one bio.tools record.
@@ -303,7 +303,7 @@ def harvest_biotools_record(
         biotools_id=(biotools_id),
         raw_biotools=(raw_biotools),
         metadata=metadata,
-        pipeline_tag=(PIPELINE_TAG),
+        pipeline_tag=(pipeline_tag),
     )
 
     # 5. Persistent upsert

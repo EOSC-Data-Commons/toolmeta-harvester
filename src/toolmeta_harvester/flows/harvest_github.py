@@ -27,7 +27,6 @@ from toolmeta_harvester.db.models import (
     Base,
     ToolMetadata,
     HarvestResult,
-    ToolHarvestRun,
 )
 from toolmeta_harvester.extractors.tool_metadata import extract_tool_metadata
 from toolmeta_harvester.quality.metadata_quality import assess_metadata_quality
@@ -270,6 +269,8 @@ def pipeline_harvest_github(
                 pipeline_tag=PIPELINE_TAG,
             )
             upsert_tool_metadata(session, record)
+
+            session.commit()
 
             logger.info(
                 "Stored GitHub repository %s (format=%s, quality=%.3f)",

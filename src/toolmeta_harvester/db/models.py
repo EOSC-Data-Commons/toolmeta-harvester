@@ -14,8 +14,9 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 from dataclasses import dataclass
+from toolmeta_harvester.db.engine import Base
 
 
 @dataclass(frozen=True)
@@ -31,10 +32,6 @@ class HarvestResult:
     @property
     def failed_count(self) -> int:
         return len(self.failed_record_ids)
-
-
-class Base(DeclarativeBase):
-    pass
 
 
 class ToolHarvestRun(Base):

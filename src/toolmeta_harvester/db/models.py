@@ -89,14 +89,6 @@ class ToolMetadata(Base):
         default=uuid.uuid4,
     )
 
-    # harvest_run_id: Mapped[uuid.UUID] = mapped_column(
-    #     ForeignKey(
-    #         "tool_harvest_run.id",
-    #         ondelete="CASCADE",
-    #     ),
-    #     nullable=False,
-    # )
-    #
     quality_score: Mapped[float | None] = mapped_column(
         Float,
     )

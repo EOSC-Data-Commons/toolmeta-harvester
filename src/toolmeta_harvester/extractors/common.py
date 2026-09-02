@@ -104,56 +104,6 @@ def scalar_value(
     return None
 
 
-# def scalar_value(
-#     value: Any,
-#     resolver: Resolver = identity,
-# ) -> str | None:
-#     """
-#     Resolve a value and reduce it to a useful scalar.
-#     """
-#
-#     value = resolver(value)
-#
-#     if value is None:
-#         return None
-#
-#     if isinstance(value, str):
-#         return value
-#
-#     if isinstance(value, (int, float, bool)):
-#         return str(value)
-#
-#     if isinstance(value, list):
-#         for item in value:
-#             result = scalar_value(item, resolver)
-#             if result is not None:
-#                 return result
-#         return None
-#
-#     if not isinstance(value, dict):
-#         return str(value)
-#
-#     candidate = (
-#         value.get("name")
-#         or value.get("value")
-#         or value.get("identifier")
-#         or value.get("@id")
-#         or value.get("url")
-#     )
-#
-#     if isinstance(candidate, dict):
-#         return scalar_value(
-#             candidate,
-#             resolver,
-#         )
-#
-#     if candidate is None:
-#         return None
-#
-#     return str(candidate)
-#
-
-
 def deduplicate_values(
     values: list[Any],
 ) -> list[Any]:

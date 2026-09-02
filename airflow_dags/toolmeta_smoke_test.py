@@ -1,8 +1,5 @@
 from airflow.sdk import dag, task
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO_ROOT / "src"))
-
 
 @dag(
     dag_id="toolmeta_smoke_test",

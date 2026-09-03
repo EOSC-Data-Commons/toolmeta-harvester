@@ -122,7 +122,12 @@ def get_file(
     if response.status_code == 404:
         return None
 
-    response.raise_for_status()def get_file_text(
+    response.raise_for_status()
+
+    return response.json()
+
+
+def get_file_text(
     instance_url: str,
     project_path: str,
     file_path: str,
@@ -187,8 +192,7 @@ def get_file_api_url(
     encoded_file = quote(file_path, safe="")
 
     return (
-        f"{instance_url}/api/v4/projects/{project_id}"
-        f"/repository/files/{encoded_file}"
+        f"{instance_url}/api/v4/projects/{project_id}/repository/files/{encoded_file}"
     )
 
 
@@ -218,7 +222,6 @@ def get_readme(
 
     return None
 
-    return response.json()
 
 def is_gitlab_url(url: str) -> bool:
     parsed = urlparse(url)

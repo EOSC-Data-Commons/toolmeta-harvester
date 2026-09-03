@@ -220,4 +220,21 @@ def get_readme(
 
     return response.json()
 
+def is_gitlab_url(url: str) -> bool:
+    parsed = urlparse(url)
 
+    if not parsed.scheme or not parsed.netloc:
+        return False
+
+    instance_url = f"{parsed.scheme}://{parsed.netloc}"
+
+    try:
+        response = requests.get(
+            f"{instance_url}/api/v4/version",
+            timeout=5,
+        )
+
+        return response.ok
+
+    except requests.RequestException:
+        return False

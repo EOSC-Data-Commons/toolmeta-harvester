@@ -24,6 +24,9 @@ def find_flow_for_url(url: str):
         if hostname in flow.hosts:
             return flow
 
+        if flow.matcher and flow.matcher(url):
+            return flow
+
     raise ValueError(f"No dynamic harvester supports URL: {url}")
 
 
@@ -71,7 +74,7 @@ def create_dynamic_dag(
     enabled: bool,
 ):
     @dag(
-        dag_id=dag_id,
+        dag_id=f"tool_{dag_id}",
         schedule=schedule,
         catchup=False,
         max_active_runs=1,

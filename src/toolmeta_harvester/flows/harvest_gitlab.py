@@ -39,6 +39,7 @@ from toolmeta_harvester.tasks.gitlab import (
     get_project,
     get_readme,
     parse_gitlab_url,
+    is_gitlab_url,
 )
 
 
@@ -296,6 +297,7 @@ def _build_fallback_metadata(
 @dynamic_harvest(
     name="gitlab",
     hosts=["gitlab.com"],
+    matcher=is_gitlab_url,
     default_schedule="0 3 * * *",
 )
 def pipeline_harvest_gitlab(

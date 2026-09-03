@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 
-HarvestKind = Literal["dynamic", "static"]
+HarvestKind = Literal["dynamic", "static", "generic"]
 
 
 @dataclass(frozen=True)
@@ -13,6 +13,7 @@ class HarvestFlow:
     handler: Callable[..., Any]
     default_schedule: str | None = None
     hosts: tuple[str, ...] = ()
+    matcher: Callable[[str], bool] | None = None
 
 
 _registry: dict[str, HarvestFlow] = {}

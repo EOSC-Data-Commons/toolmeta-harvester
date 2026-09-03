@@ -1,127 +1,84 @@
 from __future__ import annotations
 
-import base64
-from urllib.parse import quote, urlparse
 
-import requests
-
-
-def parse_gitlab_url(repository_url: str) -> tuple[str, str]:
+def convert_gitlab_to_jsonld(
+    project: dict,
+    *,
+    languages: dict | None = None,
+    readme: str | None = None,
+) -> dict:
     """
-    Parse a GitLab repository URL.
-
-    Returns:
-        instance_url, project_path
-
-    Examples:
-        https://gitlab.com/group/project
-            -> https://gitlab.com
-            -> group/project
-
-        https://gitlab.example.org/group/subgroup/project.git
-            -> https://gitlab.example.org
-            -> group/subgroup/project
+    Convert GitLab project metadata into a schema.org / CodeMeta-like
+    JSON-LD representation.
     """
 
-    parsed = urlparse(repository_url)
+    languages = languages or {}
 
-    if parsed.scheme not in {"http", "https"}:
-        raise ValueError(f"Unsupported GitLab URL: {repository_url}")
-
-    if not parsed.hostname:
-        raise ValueError(f"Invalid GitLab URL: {repository_url}")
-
-    instance_url = f"{parsed.scheme}://{parsed.netloc}"
-
-    project_path = parsed.path.strip("/")
-
-    if project_path.endswith(".git"):
-        project_path = project_path[:-4]
-
-    if not project_path:
-        raise ValueError(f"Missing GitLab project path: {repository_url}")
-
-    return instance_url, project_path
-
-
-def _headers(token: str | None = None) -> dict[str, str]:
-    headers = {
-        "Accept": "application/json",
+    result = {
+        "@context": "https://schema.org",
+        "@type": "SoftwareSourceCode",
+        "@id": project.get("web_url"),
+        "name": project.get("name"),
+        "description": project.get("description"),
+        "codeRepository": project.get("web_url"),
+        "url": project.get("web_url"),
+        "identifier": project.get("path_with_namespace"),
     }
 
-    if token:
-        headers["PRIVATE-TOKEN"] = token
+    topics = project.get("topics") or project.get("tag_list") or []
 
-    return headers
+    if topics:
+        result["keywords"] = topics
+
+    if languages:
+        result["programmingLanguage"] = [
+            {
+                "@type": "ComputerLanguage",
+                "name": language,
+            }
+            for language in languages
+        ]
+
+    namespace = project.get("namespace")
+
+    if namespace:
+        result["publisher"] = {
+            "@type": "Organization",
+            "name": namespace.get("name"),
+            "url": namespace.get("web_url"),
+        }
+
+    if project.get("created_at"):
+        result["dateCreated"] = project["created_at"]
+
+    if project.get("last_activity_at"):
+        result["dateModified"] = project["last_activity_at"]
+
+    if readme:
+        result["abstract"] = readme
+
+    return {key: value for key, value in result.items() if value is not None}
 
 
-def _project_api_url(
-    instance_url: str,
-    project_path: str,
-) -> str:
-    project_id = quote(project_path, safe="")
-
-    return f"{instance_url}/api/v4/projects/{project_id}"
-
-
-def get_project(
-    instance_url: str,
-    project_path: str,
-    *,
-    token: str | None = None,
+def merge_jsonld(
+    base: dict,
+    additional: dict,
 ) -> dict:
-    response = requests.get(
-        _project_api_url(instance_url, project_path),
-        headers=_headers(token),
-        timeout=30,
-    )
+    """
+    Merge generated metadata with repository metadata.
 
-    response.raise_for_status()
+    Values in additional metadata take precedence.
+    """
 
-    return response.json()
+    merged = dict(base)
 
+    for key, value in additional.items():
+        if value is None:
+            continue
 
-def get_languages(
-    instance_url: str,
-    project_path: str,
-    *,
-    token: str | None = None,
-) -> dict:
-    response = requests.get(
-        f"{_project_api_url(instance_url, project_path)}/languages",
-        headers=_headers(token),
-        timeout=30,
-    )
+        if key in {"@context", "@type"}:
+            continue
 
-    response.raise_for_status()
+        merged[key] = value
 
-    return response.json()
-
-
-def get_file(
-    instance_url: str,
-    project_path: str,
-    file_path: str,
-    *,
-    ref: str = "HEAD",
-    token: str | None = None,
-) -> dict | None:
-    project_id = quote(project_path, safe="")
-    encoded_file = quote(file_path, safe="")
-
-    response = requests.get(
-        (
-            f"{instance_url}/api/v4/projects/{project_id}"
-            f"/repository/files/{encoded_file}"
-        ),
-        params={"ref": ref},
-        headers=_headers(token),
-        timeout=30,
-    )
-
-    if response.status_code == 404:
-        return None
-
-    response.raise_for_status()
-
-    return response.json()
+    return merged

@@ -32,8 +32,17 @@ def find_flow_for_url(url: str):
         if hostname in flow.hosts:
             return flow
 
-        if flow.matcher and flow.matcher(url):
-            return flow
+        if flow.matcher:
+            matched = flow.matcher(url)
+            print(
+                "MATCH:",
+                flow.name,
+                url,
+                matched,
+                flush=True,
+            )
+            if matched:
+                return flow
 
     raise ValueError(f"No dynamic harvester supports URL: {url}")
 

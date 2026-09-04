@@ -426,12 +426,14 @@ def main():
     args = parser.parse_args()
 
     valid_url = is_gitlab_url(args.url)
-    logger.info("Valid GitLab URL: %s", valid_url)
+    if not valid_url:
+        logger.error("Not a valid gitalb url!")
+        return
 
-    # pipeline_harvest_gitlab(
-    #     args.url,
-    #     token=args.token,
-    # )
+    pipeline_harvest_gitlab(
+        args.url,
+        token=args.token,
+    )
 
 
 if __name__ == "__main__":

@@ -21,6 +21,14 @@ def find_flow_for_url(url: str):
     hostname = urlparse(url).hostname
 
     for flow in get_dynamic_flows():
+        print(
+            "FLOW:",
+            flow.name,
+            "hosts=",
+            flow.hosts,
+            "matcher=",
+            flow.matcher,
+        )
         if hostname in flow.hosts:
             return flow
 

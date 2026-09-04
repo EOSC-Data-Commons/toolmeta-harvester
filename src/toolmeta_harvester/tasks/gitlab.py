@@ -250,5 +250,6 @@ def is_gitlab_url(url: str) -> bool:
 
         return response.status_code == 200
 
-    except requests.RequestException:
+    except requests.RequestException as e:
+        print(f"Error checking GitLab URL: {e}")
         return False

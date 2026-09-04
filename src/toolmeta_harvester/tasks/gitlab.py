@@ -226,18 +226,29 @@ def get_readme(
 def is_gitlab_url(url: str) -> bool:
     parsed = urlparse(url)
 
-    if not parsed.scheme or not parsed.netloc:
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         return False
 
     instance_url = f"{parsed.scheme}://{parsed.netloc}"
 
+    project_path = parsed.path.strip("/")
+
+    if project_path.endswith(".git"):
+        project_path = project_path[:-4]
+
+    if not project_path:
+        return False
+
+    project_id = quote(project_path, safe="")
+
     try:
         response = requests.get(
-            f"{instance_url}/api/v4/version",
+            f"{instance_url}/api/v4/projects/{project_id}",
             timeout=5,
+            headers={"Accept": "application/json"},
         )
 
-        return response.ok
+        return response.status_code == 200
 
     except requests.RequestException:
         return False

@@ -425,10 +425,13 @@ def main():
 
     args = parser.parse_args()
 
-    pipeline_harvest_gitlab(
-        args.url,
-        token=args.token,
-    )
+    valid_url = is_gitlab_url(args.url)
+    logger.info("Valid GitLab URL: %s", valid_url)
+
+    # pipeline_harvest_gitlab(
+    #     args.url,
+    #     token=args.token,
+    # )
 
 
 if __name__ == "__main__":

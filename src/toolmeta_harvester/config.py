@@ -2,24 +2,15 @@ from dataclasses import dataclass
 import os
 from pathlib import Path
 from dynaconf import Dynaconf
-import json
 
 # Default BASE_DIR for Dynaconf interpolation in config/config.toml.
 # BASE_DIR is set to the project root (parent of the config/ directory) when not provided.
 os.environ.setdefault("BASE_DIR", str(Path(__file__).resolve().parents[2]))
 
 settings = Dynaconf(
-    envvar_prefix="TOOL_REGISTRY",
+    envvar_prefix="TOOLMETA_HARVESTER",
     settings_files=["config/config.toml", "config/.secrets.toml"],
 )
-
-# Environment variable overrides:
-# export TOOL_REGISTRY_DATABASE__HOST=localhost
-# export TOOL_REGISTRY_DATABASE__PORT=5432
-# export TOOL_REGISTRY_DATABASE__NAME=admin
-# export TOOL_REGISTRY_DATABASE__USER=harvester
-# export TOOL_REGISTRY_DATABASE__PASSWORD=yoursecretsecret
-# export TOOL_REGISTRY_GITHUB__API_KEY=your_github_api_key
 
 
 @dataclass(frozen=True)
@@ -53,9 +44,11 @@ def load_git_config() -> GitConfig:
         api_key=git["api_key"],
     )
 
+
 def egi_token() -> str:
     egi = settings.egi
     return egi["token"]
+
 
 def load_db_config() -> DatabaseConfig:
     db = settings.database

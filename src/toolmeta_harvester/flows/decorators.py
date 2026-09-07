@@ -11,6 +11,7 @@ def dynamic_harvest(
     *,
     name: str,
     hosts: list[str],
+    matcher: Callable[[str], bool] | None = None,
     default_schedule: str | None = None,
 ):
     def decorator(func: Callable[..., Any]):
@@ -21,6 +22,7 @@ def dynamic_harvest(
                 handler=func,
                 default_schedule=default_schedule,
                 hosts=tuple(hosts),
+                matcher=matcher,
             )
         )
 
@@ -39,6 +41,26 @@ def static_harvest(
             HarvestFlow(
                 name=name,
                 kind="static",
+                handler=func,
+                default_schedule=default_schedule,
+            )
+        )
+
+        return func
+
+    return decorator
+
+
+def generic_flow(
+    *,
+    name: str,
+    default_schedule: str | None = None,
+):
+    def decorator(func: Callable[..., Any]):
+        register_flow(
+            HarvestFlow(
+                name=name,
+                kind="generic",
                 handler=func,
                 default_schedule=default_schedule,
             )

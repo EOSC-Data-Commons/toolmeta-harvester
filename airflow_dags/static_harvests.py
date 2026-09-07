@@ -5,7 +5,7 @@ from toolmeta_harvester.flows.registry import get_static_flows
 
 def create_static_dag(flow):
     @dag(
-        dag_id=f"harvest_{flow.name}",
+        dag_id=f"tool_harvest_{flow.name}",
         schedule=flow.default_schedule,
         catchup=False,
         max_active_runs=1,
@@ -30,7 +30,7 @@ def create_static_dag(flow):
 
 def create_test_static_dag(flow):
     @dag(
-        dag_id=f"harvest_{flow.name}_test",
+        dag_id=f"tool_harvest_{flow.name}_test",
         schedule=flow.default_schedule,
         catchup=False,
         max_active_runs=1,
@@ -40,6 +40,31 @@ def create_test_static_dag(flow):
         @task
         def harvest():
             result = flow.handler(limit=3)
+
+            return {
+                "pipeline_tag": result.pipeline_tag,
+                "record_ids": result.record_ids,
+                "harvested_count": result.harvested_count,
+                "failed_count": result.failed_count,
+            }
+
+        harvest()
+
+    return harvest_dag()
+
+
+def create_generic_dag(flow):
+    @dag(
+        dag_id=f"tool_generic_{flow.name}",
+        schedule=flow.default_schedule,
+        catchup=False,
+        max_active_runs=1,
+        tags=["tool-harvester", "static"],
+    )
+    def harvest_dag():
+        @task
+        def harvest():
+            result = flow.handler()
 
             return {
                 "pipeline_tag": result.pipeline_tag,

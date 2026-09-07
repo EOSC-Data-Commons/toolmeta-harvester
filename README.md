@@ -16,16 +16,17 @@
 - [x] Initial data harvesting and storage from WorkflowHub
 
 ## 🚧 Phase 2 — Expansion and Refinement
-
-- [x] Additional harvest pipelines usegalaxy
-- [x] Additional harvest pipelines HAL
-- [ ] Additional harvest pipelines bio.tools
+- [x] Refactor flows to be compatabile with Airflow DAGs
+- [x] Refactor flows to be incrimental and idempotent
+- [ ] Additional harvest pipelines HAL
+- [x] Additional harvest pipelines bio.tools
 - [ ] Additional harvest pipelines Containers
+- [x] Add single source URL harvest for workflowhub.eu
+- [x] Add single source URL harvest for bio.tools
+- [x] Add single source URL harvest for github.com
+- [x] Add single source URL harvest for zenodo.org
+- [x] Add single source URL harvest for gitlab.* instances
 - [ ] Create initial embedding pipeline
-- [ ] Enrich tool description e.g. notebook description
-- [ ] Task manager e.g. Celery or Prefect for scheduling and orchestration
-- [ ] Basic tests and CI pipeline
-- [ ] Deployment to Warehouse
 
 # Installation and Usage
 

@@ -244,7 +244,7 @@ def is_gitlab_url(url: str) -> bool:
     try:
         response = requests.get(
             f"{instance_url}/api/v4/projects/{project_id}",
-            timeout=5,
+            timeout=30,
             headers={"Accept": "application/json"},
         )
 

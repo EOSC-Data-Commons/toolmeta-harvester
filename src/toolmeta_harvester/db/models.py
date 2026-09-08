@@ -249,3 +249,38 @@ class ToolMetadata(Base):
             name="uq_tool_metadata_source",
         ),
     )
+
+
+class ToolEmbedding(Base):
+    """Embeddings derived from one tool record for one embedding model."""
+
+    __tablename__ = "tool_embeddings"
+
+    tool_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tool_metadata.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    embedding_model: Mapped[str] = mapped_column(
+        String(200),
+        primary_key=True,
+    )
+    metadata_vector: Mapped[list[float]] = mapped_column(
+        ARRAY(Float),
+        nullable=False,
+    )
+    metadata_text: Mapped[str] = mapped_column(Text, nullable=False)
+    description_vector: Mapped[list[float]] = mapped_column(
+        ARRAY(Float),
+        nullable=False,
+    )
+    description_text: Mapped[str] = mapped_column(Text, nullable=False)
+    keyword_vector: Mapped[list[float] | None] = mapped_column(ARRAY(Float))
+    keyword_text: Mapped[str | None] = mapped_column(Text)
+    source_url: Mapped[str | None] = mapped_column(Text)
+    version: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )

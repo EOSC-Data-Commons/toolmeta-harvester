@@ -27,6 +27,9 @@ def register_flow(flow: HarvestFlow) -> None:
 
 
 def get_flow(name: str) -> HarvestFlow:
+    from toolmeta_harvester.flows.loader import load_flows
+
+    load_flows()
     return _registry[name]
 
 
@@ -45,4 +48,7 @@ def get_static_flows() -> list[HarvestFlow]:
 
 
 def get_flows() -> list[HarvestFlow]:
+    from toolmeta_harvester.flows.loader import load_flows
+
+    load_flows()
     return list(_registry.values())

@@ -1,32 +1,32 @@
 from __future__ import annotations
-
-from typing import Callable
-
-from toolmeta_harvester.flows.harvest_github import (
-    pipeline_harvest_github,
-)
-from toolmeta_harvester.flows.harvest_zenodo import (
-    pipeline_harvest_zenodo,
-)
-from toolmeta_harvester.flows.harvest_workflowhub import (
-    pipeline_harvest_workflowhub_url,
-)
-from toolmeta_harvester.flows.harvest_bioschemas import (
-    pipeline_harvest_biotools_url,
-)
-
+import logging
+from typing import Any
 from urllib.parse import urlparse
+from toolmeta_harvester.flows.registry import (
+    HarvestFlow,
+    get_dynamic_flows,
+    get_flow,
+)
+from toolmeta_harvester.tasks.utils import resolve_doi_url, is_doi_url
 
-HarvestPipeline = Callable[[str], object]
-PIPELINES: dict[str, HarvestPipeline] = {
-    "github": pipeline_harvest_github,
-    "zenodo": pipeline_harvest_zenodo,
-    "workflowhub": pipeline_harvest_workflowhub_url,
-    "biotools": pipeline_harvest_biotools_url,
-}
+logger = logging.getLogger(__name__)
 
 
-def detect_source(url: str) -> str:
+def normalise_harvest_url(url: str) -> str:
+    url = url.strip()
+
+    if is_doi_url(url):
+        return resolve_doi_url(url)
+
+    return url
+
+
+def host_matches(host: str, registered_host: str) -> bool:
+    registered_host = registered_host.lower()
+    return host == registered_host or host.endswith(f".{registered_host}")
+
+
+def find_dynamic_flow(url: str) -> HarvestFlow:
     host = urlparse(url).hostname
 
     if not host:
@@ -34,29 +34,12 @@ def detect_source(url: str) -> str:
 
     host = host.lower()
 
-    if host in {
-        "github.com",
-        "www.github.com",
-    }:
-        return "github"
+    for flow in get_dynamic_flows():
+        if flow.matcher is not None and flow.matcher(url):
+            return flow
 
-    if host in {
-        "zenodo.org",
-        "www.zenodo.org",
-    }:
-        return "zenodo"
-
-    if host in {
-        "workflowhub.eu",
-        "www.workflowhub.eu",
-    }:
-        return "workflowhub"
-
-    if host in {
-        "bio.tools",
-        "www.bio.tools",
-    }:
-        return "biotools"
+        if any(host_matches(host, candidate) for candidate in flow.hosts):
+            return flow
 
     raise ValueError(f"Unsupported harvest URL: {url}")
 
@@ -64,12 +47,33 @@ def detect_source(url: str) -> str:
 def harvest_url(
     url: str,
     source: str | None = None,
-):
-    source = source or detect_source(url)
+) -> Any:
+    resolved_url = normalise_harvest_url(url)
 
-    try:
-        pipeline = PIPELINES[source]
-    except KeyError as exc:
-        raise ValueError(f"Unsupported harvest source: {source}") from exc
+    if source is None:
+        flow = find_dynamic_flow(resolved_url)
+    else:
+        # Ensure decorated flow modules have been loaded.
+        get_dynamic_flows()
 
-    return pipeline(url)
+        try:
+            flow = get_flow(source)
+        except KeyError as exc:
+            raise ValueError(f"Unsupported harvest source: {source}") from exc
+
+        if flow.kind != "dynamic":
+            raise ValueError(f"Harvest flow {source!r} does not accept a URL")
+
+        if flow.matcher is not None and not flow.matcher(resolved_url):
+            raise ValueError(
+                f"URL is not accepted by harvest flow {source!r}: {resolved_url}"
+            )
+
+        logger.info(
+            "Harvesting URL %s using flow %s (%s)",
+            resolved_url,
+            flow.name,
+            flow.handler.__module__,
+        )
+    # return
+    return flow.handler(resolved_url)

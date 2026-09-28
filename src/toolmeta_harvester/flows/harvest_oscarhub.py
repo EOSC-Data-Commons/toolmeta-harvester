@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import argparse
 import logging
+from typing import Any
 from urllib.parse import urlencode, urlparse
 
-from typing import Any
 from sqlalchemy.orm import Session
 
 from toolmeta_harvester.db.engine import engine
@@ -13,7 +13,6 @@ from toolmeta_harvester.extractors.common import (
     as_list,
     deduplicate_terms,
     extract_io_entities,
-    extract_organizations,
 )
 from toolmeta_harvester.extractors.ro_crate import (
     build_entity_index,
@@ -24,13 +23,14 @@ from toolmeta_harvester.extractors.ro_crate import (
     resolve,
 )
 from toolmeta_harvester.flows.decorators import dynamic_harvest
-from toolmeta_harvester.flows.harvest_github import upsert_tool_metadata
-from toolmeta_harvester.flows.harvest_gitlab import parse_datetime
-from toolmeta_harvester.quality.metadata_quality import assess_metadata_quality
+from toolmeta_harvester.flows.harvest_github import (
+    create_tool_metadata as create_github_tool_metadata,
+    upsert_tool_metadata,
+)
 from toolmeta_harvester.tasks.github import (
     get_directory,
     get_file_api_url,
-    get_json_file
+    get_json_file,
 )
 
 PIPELINE_VERSION = "0.1.0"
@@ -59,46 +59,20 @@ def create_tool_metadata(
     metadata_format: str,
     pipeline_tag: str = PIPELINE_TAG,
 ) -> ToolMetadata:
-    quality = assess_metadata_quality(metadata)
-    return ToolMetadata(
-        quality_score=quality.score,
-        pipeline_tag=pipeline_tag,
-        source_identifier=repository.get("full_name"),
-        source_url=repository.get("html_url"),
+    """Reuse the common record mapping with OSCAR Hub provenance by default."""
+    return create_github_tool_metadata(
+        repository=repository,
+        source_metadata=source_metadata,
+        metadata=metadata,
         metadata_url=metadata_url,
         metadata_format=metadata_format,
-        metadata_version=metadata.get("metadata_version"),
-        title=metadata.get("title"),
-        description=metadata.get("description"),
-        raw_description=metadata.get("raw_description"),
-        version=metadata.get("version"),
-        license=metadata.get("license"),
-        identifiers=metadata.get("identifiers", []),
-        url=metadata.get("url"),
-        code_repository=metadata.get("code_repository"),
-        keywords=metadata.get("keywords", []),
-        authors=metadata.get("authors", []),
-        organizations=metadata.get("organizations", []),
-        types=metadata.get("types", []),
-        programming_languages=metadata.get("programming_languages", []),
-        runtime_platforms=metadata.get("runtime_platforms", []),
-        software_requirements=metadata.get("software_requirements", []),
-        software_types=metadata.get("software_types", []),
-        consumes_data=metadata.get("consumes_data", []),
-        produces_data=metadata.get("produces_data", []),
-        inputs=metadata.get("inputs", []),
-        outputs=metadata.get("outputs", []),
-        date_created=parse_datetime(metadata.get("date_created")),
-        date_published=parse_datetime(metadata.get("date_published")),
-        date_modified=parse_datetime(metadata.get("date_modified")),
-        raw_metadata=source_metadata,
+        pipeline_tag=pipeline_tag,
     )
 
 
 def extract_tool_metadata(
     metadata: dict[str, Any],
 ) -> dict[str, Any]:
-
     """Extract the service and resolve its linked acceptance-test data."""
     result = extract_ro_crate_metadata(metadata)
     entities = build_entity_index(metadata)
@@ -108,8 +82,8 @@ def extract_tool_metadata(
     def resolver(value: Any) -> Any:
         return resolve(value, entities)
 
-    inputs = []
-    outputs = []
+    inputs: list[Any] = []
+    outputs: list[Any] = []
     for test in as_list(main.get("subjectOf") or root.get("subjectOf")):
         test = resolver(test)
         if not isinstance(test, dict):
@@ -152,8 +126,8 @@ def pipeline_harvest_oscarhub(
     # An empty token explicitly disables authentication, including environment tokens.
     entries = get_directory(OWNER, REPO, "crates", ref=REF, token="")
     Base.metadata.create_all(engine)
-    record_ids = []
-    failed_record_ids = []
+    record_ids: list[str] = []
+    failed_record_ids: list[str] = []
 
     with Session(engine, expire_on_commit=False) as session:
         for entry in entries:
@@ -166,7 +140,7 @@ def pipeline_harvest_oscarhub(
                 crate = get_json_file(
                     OWNER, REPO, metadata_path, ref=REF, token="",
                 )
-                if crate is None or not is_ro_crate(crate):
+                if not isinstance(crate, dict) or not is_ro_crate(crate):
                     raise ValueError(f"Missing or invalid RO-Crate: {metadata_path}")
                 metadata = extract_tool_metadata(crate)
                 source_url = f"https://github.com/{OWNER}/{REPO}/tree/{REF}/{path}"
@@ -199,7 +173,7 @@ def pipeline_harvest_oscarhub(
     )
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Harvest OSCAR Hub crates into ToolMetadata")
     parser.add_argument("url", nargs="?", default=DEFAULT_URL)
     args = parser.parse_args()

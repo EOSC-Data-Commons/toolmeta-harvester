@@ -75,6 +75,7 @@ def extract_tool_metadata(
 ) -> dict[str, Any]:
     """Extract the service and resolve its linked acceptance-test data."""
     result = extract_ro_crate_metadata(metadata)
+    result["types"] = list(dict.fromkeys([*result["types"], "oscar"]))
     entities = build_entity_index(metadata)
     root = get_root_entity(metadata, entities)
     main = get_main_entity(root, entities) or root

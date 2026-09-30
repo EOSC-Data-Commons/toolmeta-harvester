@@ -38,10 +38,11 @@ from toolmeta_harvester.tasks.github import (
     get_readme,
     get_repository,
     parse_github_url,
+    GitHubLocation,
 )
 from toolmeta_harvester.flows.decorators import dynamic_harvest
 
-PIPELINE_VERSION = "0.1.0"
+PIPELINE_VERSION = "0.1.1"
 
 PIPELINE_TAG = (
     f"{__name__.rsplit('.', 1)[-1].removeprefix('harvest_')}@{PIPELINE_VERSION}"
@@ -78,14 +79,16 @@ def create_tool_metadata(
     metadata: dict,
     metadata_url: str,
     metadata_format: str,
+    source_identifier: str | None = None,
+    source_url: str | None = None,
     pipeline_tag: str = PIPELINE_TAG,
 ) -> ToolMetadata:
     quality = assess_metadata_quality(metadata)
     return ToolMetadata(
         quality_score=quality.score,
         pipeline_tag=pipeline_tag,
-        source_identifier=repository.get("full_name"),
-        source_url=repository.get("html_url"),
+        source_identifier=source_identifier or repository.get("full_name"),
+        source_url=source_url or repository.get("html_url"),
         metadata_url=metadata_url,
         metadata_format=metadata_format,
         metadata_version=metadata.get("metadata_version"),
@@ -149,9 +152,10 @@ def _build_fallback_metadata(
     owner: str,
     repo: str,
     repository: dict,
+    location: GitHubLocation,
     token: str | None,
 ) -> tuple[dict, dict, str]:
-    branch = repository.get("default_branch")
+    branch = location.ref or repository.get("default_branch")
     languages = get_languages(owner, repo, token=token)
     readme = get_readme(owner, repo, ref=branch, token=token)
 
@@ -162,7 +166,14 @@ def _build_fallback_metadata(
     )
     raw_files: dict[str, str] = {}
 
-    package_text = get_file_text(owner, repo, "package.json", ref=branch, token=token)
+    package_text = get_file_text(
+        owner,
+        repo,
+        # "package.json",
+        project_path(location, "package.json"),
+        ref=branch,
+        token=token,
+    )
     if package_text is not None:
         try:
             generated = merge_jsonld(
@@ -174,7 +185,12 @@ def _build_fallback_metadata(
             logger.exception("Unable to convert package.json")
 
     pyproject_text = get_file_text(
-        owner, repo, "pyproject.toml", ref=branch, token=token
+        owner,
+        repo,
+        # "pyproject.toml",
+        project_path(location, "pyproject.toml"),
+        ref=branch,
+        token=token,
     )
     if pyproject_text is not None:
         try:
@@ -186,7 +202,14 @@ def _build_fallback_metadata(
         except Exception:
             logger.exception("Unable to convert pyproject.toml")
 
-    citation_text = get_file_text(owner, repo, "CITATION.cff", ref=branch, token=token)
+    citation_text = get_file_text(
+        owner,
+        repo,
+        # "CITATION.cff",
+        project_path(location, "CITATION.cff"),
+        ref=branch,
+        token=token,
+    )
     if citation_text is not None:
         try:
             generated = merge_jsonld(
@@ -208,6 +231,12 @@ def _build_fallback_metadata(
     return generated, raw_source, repository.get("url")
 
 
+def project_path(location: GitHubLocation, filename: str) -> str:
+    if location.path:
+        return f"{location.path.rstrip('/')}/{filename}"
+    return filename
+
+
 @dynamic_harvest(
     name="github",
     hosts=["github.com"],
@@ -221,9 +250,11 @@ def pipeline_harvest_github(
     Base.metadata.create_all(engine)
 
     token = token or os.getenv("GITHUB_TOKEN")
-    owner, repo = parse_github_url(repository_url)
-    repository = get_repository(owner, repo, token=token)
-    branch = repository.get("default_branch")
+    # owner, repo = parse_github_url(repository_url)
+    location = parse_github_url(repository_url)
+    repository = get_repository(location.owner, location.repo, token=token)
+    # branch = repository.get("default_branch")
+    branch = location.ref or repository.get("default_branch")
 
     with Session(
         engine,
@@ -232,33 +263,65 @@ def pipeline_harvest_github(
         try:
             record_id = repository.get("full_name")
             codemeta = get_json_file(
-                owner,
-                repo,
-                "codemeta.json",
+                location.owner,
+                location.repo,
+                # "codemeta.json",
+                project_path(location, "codemeta.json"),
                 ref=branch,
                 token=token,
             )
 
             if codemeta is not None:
-                logger.info("Using codemeta.json for %s/%s", owner, repo)
+                logger.info(
+                    "Using codemeta.json for %s/%s", location.owner, location.repo
+                )
                 metadata = extract_tool_metadata(codemeta)
                 source_metadata = codemeta
-                metadata_url = get_file_api_url(owner, repo, "codemeta.json")
+                metadata_url = get_file_api_url(
+                    location.owner,
+                    location.repo,
+                    # "codemeta.json",
+                    project_path(location, "codemeta.json"),
+                )
                 metadata_format = "codemeta"
             else:
-                logger.info(
-                    "No codemeta.json for %s/%s; using fallback metadata",
-                    owner,
-                    repo,
-                )
-                generated, source_metadata, metadata_url = _build_fallback_metadata(
-                    owner=owner,
-                    repo=repo,
-                    repository=repository,
+                rocrate = get_json_file(
+                    location.owner,
+                    location.repo,
+                    project_path(location, "ro-crate-metadata.json"),
+                    ref=branch,
                     token=token,
                 )
-                metadata = extract_tool_metadata(generated)
-                metadata_format = "github-derived"
+
+                if rocrate is not None:
+                    logger.info(
+                        "Using ro-crate-metadata.json for %s/%s",
+                        location.owner,
+                        location.repo,
+                    )
+                    metadata = extract_tool_metadata(rocrate)
+                    source_metadata = rocrate
+                    metadata_url = get_file_api_url(
+                        location.owner,
+                        location.repo,
+                        project_path(location, "ro-crate-metadata.json"),
+                    )
+                    metadata_format = "ro-crate"
+                else:
+                    logger.info(
+                        "No codemeta.json or ro-crate-metadata.json for %s/%s; using fallback metadata",
+                        location.owner,
+                        location.repo,
+                    )
+                    generated, source_metadata, metadata_url = _build_fallback_metadata(
+                        owner=location.owner,
+                        repo=location.repo,
+                        repository=repository,
+                        location=location,
+                        token=token,
+                    )
+                    metadata = extract_tool_metadata(generated)
+                    metadata_format = "github-derived"
 
             record = create_tool_metadata(
                 repository=repository,
@@ -266,6 +329,8 @@ def pipeline_harvest_github(
                 metadata=metadata,
                 metadata_url=metadata_url,
                 metadata_format=metadata_format,
+                source_identifier=location.path,
+                source_url=repository_url if location.path else None,
                 pipeline_tag=PIPELINE_TAG,
             )
             upsert_tool_metadata(session, record)

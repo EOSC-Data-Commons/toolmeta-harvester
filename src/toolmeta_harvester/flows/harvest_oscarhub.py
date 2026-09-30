@@ -75,7 +75,7 @@ def extract_tool_metadata(
 ) -> dict[str, Any]:
     """Extract the service and resolve its linked acceptance-test data."""
     result = extract_ro_crate_metadata(metadata)
-    result["types"] = list(dict.fromkeys([*result["types"], "oscar"]))
+    result["types"] = list(dict.fromkeys([*result["types"], "Oscar"]))
     entities = build_entity_index(metadata)
     root = get_root_entity(metadata, entities)
     main = get_main_entity(root, entities) or root
@@ -139,7 +139,11 @@ def pipeline_harvest_oscarhub(
             try:
                 metadata_path = f"{path}/ro-crate-metadata.json"
                 crate = get_json_file(
-                    OWNER, REPO, metadata_path, ref=REF, token="",
+                    OWNER,
+                    REPO,
+                    metadata_path,
+                    ref=REF,
+                    token="",
                 )
                 if not isinstance(crate, dict) or not is_ro_crate(crate):
                     raise ValueError(f"Missing or invalid RO-Crate: {metadata_path}")
@@ -153,7 +157,8 @@ def pipeline_harvest_oscarhub(
                     metadata=metadata,
                     metadata_url=(
                         get_file_api_url(OWNER, REPO, metadata_path)
-                        + "?" + urlencode({"ref": REF})
+                        + "?"
+                        + urlencode({"ref": REF})
                     ),
                     metadata_format="ro-crate",
                     pipeline_tag=PIPELINE_TAG,
@@ -175,7 +180,9 @@ def pipeline_harvest_oscarhub(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Harvest OSCAR Hub crates into ToolMetadata")
+    parser = argparse.ArgumentParser(
+        description="Harvest OSCAR Hub crates into ToolMetadata"
+    )
     parser.add_argument("url", nargs="?", default=DEFAULT_URL)
     args = parser.parse_args()
     result = pipeline_harvest_oscarhub(args.url)

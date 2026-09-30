@@ -4,6 +4,7 @@ import json
 import os
 import re
 from urllib.parse import urlparse
+from dataclasses import dataclass
 
 import requests
 
@@ -18,6 +19,7 @@ RAW_HEADERS = {
     "User-Agent": "toolmeta-harvester/1.0",
 }
 
+
 def _headers(*, raw: bool = False, token: str | None = None) -> dict[str, str]:
     headers = dict(RAW_HEADERS if raw else JSON_HEADERS)
     token = token or os.getenv("GITHUB_TOKEN")
@@ -25,14 +27,48 @@ def _headers(*, raw: bool = False, token: str | None = None) -> dict[str, str]:
         headers["Authorization"] = f"Bearer {token}"
     return headers
 
-def parse_github_url(url: str) -> tuple[str, str]:
+
+@dataclass(frozen=True)
+class GitHubLocation:
+    owner: str
+    repo: str
+    ref: str | None = None
+    path: str | None = None
+
+
+def parse_github_url(url: str) -> GitHubLocation:
     parsed = urlparse(url)
-    if parsed.netloc.lower() not in {"github.com", "www.github.com"}:
-        raise ValueError(f"Not a GitHub repository URL: {url}")
-    parts = [p for p in parsed.path.split("/") if p]
+    parts = [part for part in parsed.path.split("/") if part]
+
     if len(parts) < 2:
-        raise ValueError(f"Unable to determine owner/repository from {url}")
-    return parts[0], re.sub(r"\.git$", "", parts[1])
+        raise ValueError(f"Invalid GitHub repository URL: {url}")
+
+    owner = parts[0]
+    repo = parts[1].removesuffix(".git")
+
+    if len(parts) >= 4 and parts[2] == "tree":
+        return GitHubLocation(
+            owner=owner,
+            repo=repo,
+            ref=parts[3],
+            path="/".join(parts[4:]) or None,
+        )
+
+    return GitHubLocation(
+        owner=owner,
+        repo=repo,
+    )
+
+
+# def parse_github_url(url: str) -> tuple[str, str]:
+#     parsed = urlparse(url)
+#     if parsed.netloc.lower() not in {"github.com", "www.github.com"}:
+#         raise ValueError(f"Not a GitHub repository URL: {url}")
+#     parts = [p for p in parsed.path.split("/") if p]
+#     if len(parts) < 2:
+#         raise ValueError(f"Unable to determine owner/repository from {url}")
+#     return parts[0], re.sub(r"\.git$", "", parts[1])
+
 
 def get_repository(owner: str, repo: str, *, token: str | None = None) -> dict:
     r = requests.get(
@@ -43,6 +79,7 @@ def get_repository(owner: str, repo: str, *, token: str | None = None) -> dict:
     r.raise_for_status()
     return r.json()
 
+
 def get_languages(owner: str, repo: str, *, token: str | None = None) -> dict[str, int]:
     r = requests.get(
         f"{GITHUB_API}/repos/{owner}/{repo}/languages",
@@ -52,8 +89,10 @@ def get_languages(owner: str, repo: str, *, token: str | None = None) -> dict[st
     r.raise_for_status()
     return r.json()
 
+
 def get_file_api_url(owner: str, repo: str, path: str) -> str:
     return f"{GITHUB_API}/repos/{owner}/{repo}/contents/{path}"
+
 
 def get_file_text(
     owner: str,
@@ -75,6 +114,7 @@ def get_file_text(
     r.raise_for_status()
     return r.text
 
+
 def get_json_file(
     owner: str,
     repo: str,
@@ -90,6 +130,7 @@ def get_json_file(
     if not isinstance(value, dict):
         raise ValueError(f"{path} does not contain a JSON object")
     return value
+
 
 def get_readme(
     owner: str,

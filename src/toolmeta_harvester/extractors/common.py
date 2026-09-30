@@ -379,6 +379,7 @@ def extract_terms(
             terms.append(
                 {
                     "id": None,
+                    "type": [],
                     "name": entity,
                     "alternate_name": None,
                     "identifier": None,
@@ -394,6 +395,7 @@ def extract_terms(
             terms.append(
                 {
                     "id": None,
+                    "type": [],
                     "name": str(entity),
                     "alternate_name": None,
                     "identifier": None,
@@ -408,6 +410,11 @@ def extract_terms(
         terms.append(
             {
                 "id": entity.get("@id"),
+                "type": [
+                    str(type_id)
+                    for type_id in as_list(entity.get("@type"))
+                    if type_id is not None
+                ],
                 "name": entity.get("name"),
                 "alternate_name": entity.get("alternateName"),
                 "identifier": scalar_value(

@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 from dataclasses import dataclass
 
 import requests
+from typing import Any
 
 GITHUB_API = "https://api.github.com"
 
@@ -60,14 +61,49 @@ def parse_github_url(url: str) -> GitHubLocation:
     )
 
 
-# def parse_github_url(url: str) -> tuple[str, str]:
-#     parsed = urlparse(url)
-#     if parsed.netloc.lower() not in {"github.com", "www.github.com"}:
-#         raise ValueError(f"Not a GitHub repository URL: {url}")
-#     parts = [p for p in parsed.path.split("/") if p]
-#     if len(parts) < 2:
-#         raise ValueError(f"Unable to determine owner/repository from {url}")
-#     return parts[0], re.sub(r"\.git$", "", parts[1])
+def get_directory(
+    owner: str,
+    repo: str,
+    path: str,
+    *,
+    ref: str | None = None,
+    token: str | None = None,
+) -> list[dict[str, Any]]:
+    url = f"https://api.github.com/repos/{owner}/{repo}/contents/{path}"
+
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    params = {}
+    if ref:
+        params["ref"] = ref
+
+    response = requests.get(
+        url,
+        headers=headers,
+        params=params,
+        timeout=30,
+    )
+    response.raise_for_status()
+
+    entries = response.json()
+
+    if not isinstance(entries, list):
+        raise ValueError(f"GitHub path is not a directory: {path}")
+
+    return [
+        {
+            "type": entry["type"],
+            "name": entry["name"],
+            "path": entry["path"],
+        }
+        for entry in entries
+    ]
 
 
 def get_repository(owner: str, repo: str, *, token: str | None = None) -> dict:

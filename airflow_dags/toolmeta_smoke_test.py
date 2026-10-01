@@ -5,7 +5,7 @@ from airflow.sdk import dag, task
     dag_id="toolmeta_smoke_test",
     schedule=None,
     catchup=False,
-    tags=["test", "tool-harvester"],
+    tags=["test"],
 )
 def test_toolmeta_import():
 

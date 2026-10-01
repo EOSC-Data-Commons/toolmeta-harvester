@@ -34,50 +34,51 @@ class HarvestResult:
         return len(self.failed_record_ids)
 
 
-class ToolHarvestRun(Base):
-    __tablename__ = "tool_harvest_run"
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid.uuid4,
-    )
-
-    # workflowhub, github, zenodo, ...
-    source: Mapped[str] = mapped_column(
-        String(100),
-        nullable=False,
-    )
-
-    source_url: Mapped[str | None] = mapped_column(Text)
-
-    started_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
-    )
-
-    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-
-    status: Mapped[str] = mapped_column(
-        String(50),
-        default="running",
-        nullable=False,
-    )
-
-    harvested_count: Mapped[int] = mapped_column(
-        Integer,
-        default=0,
-        nullable=False,
-    )
-
-    failed_count: Mapped[int] = mapped_column(
-        Integer,
-        default=0,
-        nullable=False,
-    )
-
-    # records: Mapped[list["ToolMetadata"]] = relationship(back_populates="harvest_run")
+# class ToolHarvestRun(Base):
+#     __tablename__ = "tool_harvest_run"
+#
+#     id: Mapped[uuid.UUID] = mapped_column(
+#         UUID(as_uuid=True),
+#         primary_key=True,
+#         default=uuid.uuid4,
+#     )
+#
+#     # workflowhub, github, zenodo, ...
+#     source: Mapped[str] = mapped_column(
+#         String(100),
+#         nullable=False,
+#     )
+#
+#     source_url: Mapped[str | None] = mapped_column(Text)
+#
+#     started_at: Mapped[datetime] = mapped_column(
+#         DateTime(timezone=True),
+#         server_default=func.now(),
+#         nullable=False,
+#     )
+#
+#     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+#
+#     status: Mapped[str] = mapped_column(
+#         String(50),
+#         default="running",
+#         nullable=False,
+#     )
+#
+#     harvested_count: Mapped[int] = mapped_column(
+#         Integer,
+#         default=0,
+#         nullable=False,
+#     )
+#
+#     failed_count: Mapped[int] = mapped_column(
+#         Integer,
+#         default=0,
+#         nullable=False,
+#     )
+#
+#     # records: Mapped[list["ToolMetadata"]] = relationship(back_populates="harvest_run")
+#
 
 
 class ToolMetadata(Base):

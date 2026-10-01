@@ -34,7 +34,7 @@ def create_test_static_dag(flow):
         schedule=flow.default_schedule,
         catchup=False,
         max_active_runs=1,
-        tags=["tool-harvester", "static"],
+        tags=["test"],
     )
     def harvest_dag():
         @task

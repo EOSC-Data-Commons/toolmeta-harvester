@@ -237,6 +237,15 @@ def project_path(location: GitHubLocation, filename: str) -> str:
     return filename
 
 
+def create_source_identifier(repository: dict, location: GitHubLocation) -> str:
+    identifier = repository["full_name"]
+
+    if location.path:
+        identifier = f"{identifier}/{location.path.strip('/')}"
+
+    return identifier
+
+
 @dynamic_harvest(
     name="github",
     hosts=["github.com"],
@@ -255,6 +264,8 @@ def pipeline_harvest_github(
     repository = get_repository(location.owner, location.repo, token=token)
     # branch = repository.get("default_branch")
     branch = location.ref or repository.get("default_branch")
+
+    source_identifier = create_source_identifier(repository, location)
 
     with Session(
         engine,
@@ -329,7 +340,7 @@ def pipeline_harvest_github(
                 metadata=metadata,
                 metadata_url=metadata_url,
                 metadata_format=metadata_format,
-                source_identifier=location.path,
+                source_identifier=source_identifier,
                 source_url=repository_url if location.path else None,
                 pipeline_tag=PIPELINE_TAG,
             )

@@ -113,7 +113,7 @@ def extract_tool_metadata(
 
 @static_harvest(
     name="oscarhub_all",
-    default_schedule="0 3 * * *",
+    default_schedule="0 23 * * 6",
 )
 def pipeline_harvest_oscarhub(
     repository_url: str = DEFAULT_URL,

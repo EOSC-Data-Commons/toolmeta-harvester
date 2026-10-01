@@ -405,7 +405,6 @@ def get_workflow(
 @dynamic_harvest(
     name="workflowhub",
     hosts=["workflowhub.eu"],
-    default_schedule="0 3 * * *",
 )
 def pipeline_harvest_workflowhub_url(
     workflow_url: str,
@@ -473,7 +472,7 @@ def pipeline_harvest_workflowhub_url(
 
 @static_harvest(
     name="workflowhub_all",
-    default_schedule="0 3 * * *",
+    default_schedule="0 20 * * 6",
 )
 def pipeline_harvest_workflowhub(
     limit: int | None = None,

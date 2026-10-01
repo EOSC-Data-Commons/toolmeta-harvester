@@ -249,7 +249,6 @@ def create_source_identifier(repository: dict, location: GitHubLocation) -> str:
 @dynamic_harvest(
     name="github",
     hosts=["github.com"],
-    default_schedule="0 3 * * *",
 )
 def pipeline_harvest_github(
     repository_url: str,

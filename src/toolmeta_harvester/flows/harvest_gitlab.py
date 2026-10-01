@@ -298,7 +298,6 @@ def _build_fallback_metadata(
     name="gitlab",
     hosts=["gitlab.com"],
     matcher=is_gitlab_url,
-    default_schedule="0 3 * * *",
 )
 def pipeline_harvest_gitlab(
     repository_url: str,

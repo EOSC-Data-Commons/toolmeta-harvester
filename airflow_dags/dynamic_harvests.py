@@ -1,4 +1,5 @@
 import os
+import hashlib
 import re
 from urllib.parse import urlparse
 
@@ -82,6 +83,25 @@ def make_dag_id(url: str) -> str:
     return f"harvest_{hostname}_{record_id}"
 
 
+def weekend_schedule(dag_id: str) -> str:
+    # Saturday 20:00 -> Sunday 04:00 = 32 x 15-minute slots
+    slots = 32
+
+    digest = hashlib.sha256(dag_id.encode()).digest()
+    slot = int.from_bytes(digest[:4], "big") % slots
+
+    minutes_from_start = slot * 15
+    total_minutes = 20 * 60 + minutes_from_start
+
+    day_offset, minutes = divmod(total_minutes, 24 * 60)
+    hour, minute = divmod(minutes, 60)
+
+    # cron: Saturday = 6, Sunday = 0
+    day = 6 if day_offset == 0 else 0
+
+    return f"{minute} {hour} * * {day}"
+
+
 def create_dynamic_dag(
     *,
     dag_id: str,
@@ -90,6 +110,8 @@ def create_dynamic_dag(
     schedule: str | None,
     enabled: bool,
 ):
+    schedule = schedule or weekend_schedule(dag_id)
+
     @dag(
         dag_id=f"tool_{dag_id}",
         schedule=schedule,

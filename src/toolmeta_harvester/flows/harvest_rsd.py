@@ -314,7 +314,7 @@ def iter_rsd_software(
 
 @static_harvest(
     name="rsd",
-    default_schedule="0 3 * * *",
+    default_schedule="0 22 * * 6",
 )
 def pipeline_harvest_rsd(
     limit: int | None = None,

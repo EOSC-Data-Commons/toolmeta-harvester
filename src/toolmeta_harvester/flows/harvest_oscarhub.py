@@ -22,7 +22,7 @@ from toolmeta_harvester.extractors.ro_crate import (
     is_ro_crate,
     resolve,
 )
-from toolmeta_harvester.flows.decorators import dynamic_harvest
+from toolmeta_harvester.flows.decorators import static_harvest
 from toolmeta_harvester.flows.harvest_github import (
     create_tool_metadata as create_github_tool_metadata,
     upsert_tool_metadata,
@@ -111,10 +111,8 @@ def extract_tool_metadata(
     return result
 
 
-@dynamic_harvest(
-    name="oscarhub",
-    hosts=[],
-    matcher=is_oscarhub_url,
+@static_harvest(
+    name="oscarhub_all",
     default_schedule="0 3 * * *",
 )
 def pipeline_harvest_oscarhub(

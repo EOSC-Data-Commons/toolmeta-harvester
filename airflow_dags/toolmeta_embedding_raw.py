@@ -100,7 +100,7 @@ def embed_descriptions():
             response = requests.post(
                 EMBEDDING_API,
                 headers={
-                    "Authorization": f"{EGI_LLM_API_KEY}",
+                    "Authorization": f"Bearer {EGI_LLM_API_KEY}",
                     "Content-Type": "application/json",
                 },
                 json={

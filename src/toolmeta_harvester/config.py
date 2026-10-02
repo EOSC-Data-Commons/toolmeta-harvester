@@ -45,9 +45,9 @@ def load_git_config() -> GitConfig:
     )
 
 
-def egi_token() -> str:
+def egi_llm_api_key() -> str:
     egi = settings.egi
-    return egi["token"]
+    return egi["llm_api_key"]
 
 
 def load_db_config() -> DatabaseConfig:

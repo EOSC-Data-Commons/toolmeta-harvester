@@ -15,6 +15,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
+from pgvector.sqlalchemy import Vector
+
 from dataclasses import dataclass
 from toolmeta_harvester.db.engine import Base
 
@@ -32,53 +34,6 @@ class HarvestResult:
     @property
     def failed_count(self) -> int:
         return len(self.failed_record_ids)
-
-
-# class ToolHarvestRun(Base):
-#     __tablename__ = "tool_harvest_run"
-#
-#     id: Mapped[uuid.UUID] = mapped_column(
-#         UUID(as_uuid=True),
-#         primary_key=True,
-#         default=uuid.uuid4,
-#     )
-#
-#     # workflowhub, github, zenodo, ...
-#     source: Mapped[str] = mapped_column(
-#         String(100),
-#         nullable=False,
-#     )
-#
-#     source_url: Mapped[str | None] = mapped_column(Text)
-#
-#     started_at: Mapped[datetime] = mapped_column(
-#         DateTime(timezone=True),
-#         server_default=func.now(),
-#         nullable=False,
-#     )
-#
-#     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-#
-#     status: Mapped[str] = mapped_column(
-#         String(50),
-#         default="running",
-#         nullable=False,
-#     )
-#
-#     harvested_count: Mapped[int] = mapped_column(
-#         Integer,
-#         default=0,
-#         nullable=False,
-#     )
-#
-#     failed_count: Mapped[int] = mapped_column(
-#         Integer,
-#         default=0,
-#         nullable=False,
-#     )
-#
-#     # records: Mapped[list["ToolMetadata"]] = relationship(back_populates="harvest_run")
-#
 
 
 class ToolMetadata(Base):
@@ -248,5 +203,61 @@ class ToolMetadata(Base):
             "source_url",
             "source_identifier",
             name="uq_tool_metadata_source",
+        ),
+    )
+
+
+class ToolEmbedding(Base):
+    """A single embedding derived from a tool metadata record."""
+
+    __tablename__ = "tool_embeddings"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+
+    tool_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tool_metadata.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # description, keywords, authors, metadata, ...
+    embedding_type: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+    )
+
+    embedding_model: Mapped[str] = mapped_column(
+        String(200),
+        nullable=False,
+    )
+
+    # Exact canonical text that was sent to the embedding model
+    text: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    vector: Mapped[list[float]] = mapped_column(
+        Vector(768),
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "tool_id",
+            "embedding_type",
+            "embedding_model",
+            name="uq_tool_embedding",
         ),
     )

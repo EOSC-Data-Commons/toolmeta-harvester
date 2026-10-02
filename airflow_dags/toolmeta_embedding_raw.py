@@ -73,7 +73,8 @@ def embed_descriptions():
 
         ids = [str(tool_id) for tool_id in tool_ids]
 
-        return [ids[i : i + BATCH_SIZE] for i in range(0, len(ids), BATCH_SIZE)]
+        # return [ids[i : i + BATCH_SIZE] for i in range(0, len(ids), BATCH_SIZE)]
+        return [ids[:BATCH_SIZE]]
 
     @task
     def embed_batch(tool_ids: list[str]) -> int:

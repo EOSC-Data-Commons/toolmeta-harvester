@@ -17,7 +17,7 @@ EMBEDDING_MODEL = "nomic-embed-text-v2-moe"
 EMBEDDING_TYPE = "description"
 EMBEDDING_API = "https://llm.ai.egi.eu/embeddings"
 
-BATCH_SIZE = 100
+BATCH_SIZE = 10
 EGI_LLM_API_KEY = egi_llm_api_key()
 
 

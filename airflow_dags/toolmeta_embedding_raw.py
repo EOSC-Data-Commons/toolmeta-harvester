@@ -43,7 +43,7 @@ def embed_descriptions():
 
         An embedding is stale when:
         - no embedding exists, or
-        - ToolMetadata.date_modified > ToolEmbedding.embedded_at
+        - ToolMetadata.date_modified > ToolEmbedding.created_at
         """
 
         with Session(engine) as session:
@@ -63,7 +63,7 @@ def embed_descriptions():
                         # Never embedded
                         ToolEmbedding.id.is_(None),
                         # Source metadata changed after embedding
-                        ToolMetadata.date_modified > ToolEmbedding.embedded_at,
+                        ToolMetadata.date_modified > ToolEmbedding.created_at,
                     ),
                 )
                 .order_by(ToolMetadata.id)
@@ -151,7 +151,7 @@ def embed_descriptions():
                     "text": stmt.excluded.text,
                     "text_hash": stmt.excluded.text_hash,
                     "vector": stmt.excluded.vector,
-                    "embedded_at": func.now(),
+                    "created_at": func.now(),
                 },
             )
 

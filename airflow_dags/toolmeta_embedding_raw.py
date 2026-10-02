@@ -133,7 +133,7 @@ def embed_descriptions():
                     "embedding_type": EMBEDDING_TYPE,
                     "embedding_model": EMBEDDING_MODEL,
                     "text": record.description,
-                    "text_hash": text_hash(record.description),
+                    # "text_hash": text_hash(record.description),
                     "vector": result["embedding"],
                 }
                 for record, result in zip(records, results)
@@ -149,7 +149,7 @@ def embed_descriptions():
                 constraint="uq_tool_embedding",
                 set_={
                     "text": stmt.excluded.text,
-                    "text_hash": stmt.excluded.text_hash,
+                    # "text_hash": stmt.excluded.text_hash,
                     "vector": stmt.excluded.vector,
                     "created_at": func.now(),
                 },

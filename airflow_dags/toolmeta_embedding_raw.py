@@ -11,6 +11,7 @@ from toolmeta_harvester.config import egi_llm_api_key
 from toolmeta_harvester.db.engine import engine
 
 from toolmeta_harvester.db.models import Base, ToolMetadata, ToolEmbedding
+from toolmeta_harvester.tasks import embedding
 
 
 EMBEDDING_MODEL = "nomic-embed-text-v2-moe"
@@ -78,7 +79,6 @@ def embed_descriptions():
 
     @task
     def embed_batch(tool_ids: list[str]) -> int:
-
         ids = [uuid.UUID(tool_id) for tool_id in tool_ids]
 
         with Session(engine) as session:
@@ -93,55 +93,43 @@ def embed_descriptions():
             if not records:
                 return 0
 
-            # -----------------------------------------------------
-            # Generate embeddings in one API request
-            # -----------------------------------------------------
+            # ---------------------------------------------------------
+            # Generate description embeddings
+            # ---------------------------------------------------------
 
-            response = requests.post(
-                EMBEDDING_API,
-                headers={
-                    "Authorization": f"Bearer {EGI_LLM_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": EMBEDDING_MODEL,
-                    "input": [record.description for record in records],
-                },
-                timeout=120,
+            vectors = embedding.embed(
+                [record.description for record in records],
+                api_key=EGI_LLM_API_KEY,
+                api_url=EMBEDDING_API,
+                model=EMBEDDING_MODEL,
+                prefix="search_document: ",
             )
 
-            response.raise_for_status()
-
-            results = sorted(
-                response.json()["data"],
-                key=lambda result: result["index"],
-            )
-
-            if len(results) != len(records):
+            if len(vectors) != len(records):
                 raise RuntimeError(
-                    f"Embedding API returned {len(results)} embeddings "
-                    f"for {len(records)} inputs"
+                    f"Embedding API returned {len(vectors)} vectors "
+                    f"for {len(records)} records"
                 )
 
-            # -----------------------------------------------------
+            # ---------------------------------------------------------
             # Prepare rows
-            # -----------------------------------------------------
+            # ---------------------------------------------------------
 
             values = [
                 {
                     "tool_id": record.id,
                     "embedding_type": EMBEDDING_TYPE,
                     "embedding_model": EMBEDDING_MODEL,
+                    # Store the original text, not the prefixed/truncated text.
                     "text": record.description,
-                    # "text_hash": text_hash(record.description),
-                    "vector": result["embedding"],
+                    "vector": vector,
                 }
-                for record, result in zip(records, results)
+                for record, vector in zip(records, vectors)
             ]
 
-            # -----------------------------------------------------
-            # Idempotent bulk UPSERT
-            # -----------------------------------------------------
+            # ---------------------------------------------------------
+            # Bulk UPSERT
+            # ---------------------------------------------------------
 
             stmt = insert(ToolEmbedding).values(values)
 
@@ -149,7 +137,6 @@ def embed_descriptions():
                 constraint="uq_tool_embedding",
                 set_={
                     "text": stmt.excluded.text,
-                    # "text_hash": stmt.excluded.text_hash,
                     "vector": stmt.excluded.vector,
                     "created_at": func.now(),
                 },
@@ -159,6 +146,90 @@ def embed_descriptions():
             session.commit()
 
             return len(values)
+
+    # @task
+    # def embed_batch(tool_ids: list[str]) -> int:
+    #
+    #     ids = [uuid.UUID(tool_id) for tool_id in tool_ids]
+    #
+    #     with Session(engine) as session:
+    #         records = session.scalars(
+    #             select(ToolMetadata)
+    #             .where(ToolMetadata.id.in_(ids))
+    #             .order_by(ToolMetadata.id)
+    #         ).all()
+    #
+    #         records = [record for record in records if record.description]
+    #
+    #         if not records:
+    #             return 0
+    #
+    #         # -----------------------------------------------------
+    #         # Generate embeddings in one API request
+    #         # -----------------------------------------------------
+    #
+    #         response = requests.post(
+    #             EMBEDDING_API,
+    #             headers={
+    #                 "Authorization": f"Bearer {EGI_LLM_API_KEY}",
+    #                 "Content-Type": "application/json",
+    #             },
+    #             json={
+    #                 "model": EMBEDDING_MODEL,
+    #                 "input": [record.description for record in records],
+    #             },
+    #             timeout=120,
+    #         )
+    #
+    #         response.raise_for_status()
+    #
+    #         results = sorted(
+    #             response.json()["data"],
+    #             key=lambda result: result["index"],
+    #         )
+    #
+    #         if len(results) != len(records):
+    #             raise RuntimeError(
+    #                 f"Embedding API returned {len(results)} embeddings "
+    #                 f"for {len(records)} inputs"
+    #             )
+    #
+    #         # -----------------------------------------------------
+    #         # Prepare rows
+    #         # -----------------------------------------------------
+    #
+    #         values = [
+    #             {
+    #                 "tool_id": record.id,
+    #                 "embedding_type": EMBEDDING_TYPE,
+    #                 "embedding_model": EMBEDDING_MODEL,
+    #                 "text": record.description,
+    #                 # "text_hash": text_hash(record.description),
+    #                 "vector": result["embedding"],
+    #             }
+    #             for record, result in zip(records, results)
+    #         ]
+    #
+    #         # -----------------------------------------------------
+    #         # Idempotent bulk UPSERT
+    #         # -----------------------------------------------------
+    #
+    #         stmt = insert(ToolEmbedding).values(values)
+    #
+    #         stmt = stmt.on_conflict_do_update(
+    #             constraint="uq_tool_embedding",
+    #             set_={
+    #                 "text": stmt.excluded.text,
+    #                 # "text_hash": stmt.excluded.text_hash,
+    #                 "vector": stmt.excluded.vector,
+    #                 "created_at": func.now(),
+    #             },
+    #         )
+    #
+    #         session.execute(stmt)
+    #         session.commit()
+    #
+    #         return len(values)
 
     batches = create_batches()
 

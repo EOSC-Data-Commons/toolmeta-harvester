@@ -32,7 +32,7 @@ def text_hash(text: str) -> str:
     max_active_tasks=10,
     tags=["embedding"],
 )
-def embed_descriptions(min_description_length: int):
+def embed_descriptions():
 
     Base.metadata.create_all(engine)
 
@@ -59,7 +59,7 @@ def embed_descriptions(min_description_length: int):
                 )
                 .where(
                     ToolMetadata.description.is_not(None),
-                    func.length(ToolMetadata.description) >= min_description_length,
+                    func.length(ToolMetadata.description) >= MIN_DESCRIPTION_LENGTH,
                     or_(
                         # Never embedded
                         ToolEmbedding.id.is_(None),
@@ -154,4 +154,4 @@ def embed_descriptions(min_description_length: int):
     )
 
 
-embed_descriptions(MIN_DESCRIPTION_LENGTH)
+embed_descriptions()

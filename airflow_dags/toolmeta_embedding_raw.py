@@ -1,7 +1,5 @@
 import hashlib
-import os
 import uuid
-import requests
 
 from airflow.sdk import dag, task
 from sqlalchemy import and_, or_, select, func
@@ -19,6 +17,7 @@ EMBEDDING_TYPE = "description"
 EMBEDDING_API = "https://llm.ai.egi.eu/embeddings"
 
 BATCH_SIZE = 10
+MIN_DESCRIPTION_LENGTH = 50
 EGI_LLM_API_KEY = egi_llm_api_key()
 
 
@@ -27,13 +26,13 @@ def text_hash(text: str) -> str:
 
 
 @dag(
-    dag_id="toolmeta_embedding_raw",
+    dag_id="toolmeta_embedding_description",
     schedule=None,
     catchup=False,
     max_active_tasks=10,
     tags=["embedding"],
 )
-def embed_descriptions():
+def embed_descriptions(min_description_length: int):
 
     Base.metadata.create_all(engine)
 
@@ -60,6 +59,7 @@ def embed_descriptions():
                 )
                 .where(
                     ToolMetadata.description.is_not(None),
+                    func.length(ToolMetadata.description) >= min_description_length,
                     or_(
                         # Never embedded
                         ToolEmbedding.id.is_(None),
@@ -147,90 +147,6 @@ def embed_descriptions():
 
             return len(values)
 
-    # @task
-    # def embed_batch(tool_ids: list[str]) -> int:
-    #
-    #     ids = [uuid.UUID(tool_id) for tool_id in tool_ids]
-    #
-    #     with Session(engine) as session:
-    #         records = session.scalars(
-    #             select(ToolMetadata)
-    #             .where(ToolMetadata.id.in_(ids))
-    #             .order_by(ToolMetadata.id)
-    #         ).all()
-    #
-    #         records = [record for record in records if record.description]
-    #
-    #         if not records:
-    #             return 0
-    #
-    #         # -----------------------------------------------------
-    #         # Generate embeddings in one API request
-    #         # -----------------------------------------------------
-    #
-    #         response = requests.post(
-    #             EMBEDDING_API,
-    #             headers={
-    #                 "Authorization": f"Bearer {EGI_LLM_API_KEY}",
-    #                 "Content-Type": "application/json",
-    #             },
-    #             json={
-    #                 "model": EMBEDDING_MODEL,
-    #                 "input": [record.description for record in records],
-    #             },
-    #             timeout=120,
-    #         )
-    #
-    #         response.raise_for_status()
-    #
-    #         results = sorted(
-    #             response.json()["data"],
-    #             key=lambda result: result["index"],
-    #         )
-    #
-    #         if len(results) != len(records):
-    #             raise RuntimeError(
-    #                 f"Embedding API returned {len(results)} embeddings "
-    #                 f"for {len(records)} inputs"
-    #             )
-    #
-    #         # -----------------------------------------------------
-    #         # Prepare rows
-    #         # -----------------------------------------------------
-    #
-    #         values = [
-    #             {
-    #                 "tool_id": record.id,
-    #                 "embedding_type": EMBEDDING_TYPE,
-    #                 "embedding_model": EMBEDDING_MODEL,
-    #                 "text": record.description,
-    #                 # "text_hash": text_hash(record.description),
-    #                 "vector": result["embedding"],
-    #             }
-    #             for record, result in zip(records, results)
-    #         ]
-    #
-    #         # -----------------------------------------------------
-    #         # Idempotent bulk UPSERT
-    #         # -----------------------------------------------------
-    #
-    #         stmt = insert(ToolEmbedding).values(values)
-    #
-    #         stmt = stmt.on_conflict_do_update(
-    #             constraint="uq_tool_embedding",
-    #             set_={
-    #                 "text": stmt.excluded.text,
-    #                 # "text_hash": stmt.excluded.text_hash,
-    #                 "vector": stmt.excluded.vector,
-    #                 "created_at": func.now(),
-    #             },
-    #         )
-    #
-    #         session.execute(stmt)
-    #         session.commit()
-    #
-    #         return len(values)
-
     batches = create_batches()
 
     embed_batch.expand(
@@ -238,4 +154,4 @@ def embed_descriptions():
     )
 
 
-embed_descriptions()
+embed_descriptions(MIN_DESCRIPTION_LENGTH)

@@ -16,7 +16,7 @@ EMBEDDING_MODEL = "nomic-embed-text-v2-moe"
 EMBEDDING_TYPE = "description"
 EMBEDDING_API = "https://llm.ai.egi.eu/embeddings"
 
-BATCH_SIZE = 10
+AIRFLOW_BATCH_SIZE = 500
 MIN_DESCRIPTION_LENGTH = 50
 EGI_LLM_API_KEY = egi_llm_api_key()
 
@@ -29,7 +29,7 @@ def text_hash(text: str) -> str:
     dag_id="toolmeta_embedding_description",
     schedule=None,
     catchup=False,
-    max_active_tasks=100,
+    max_active_tasks=10,
     tags=["embedding"],
 )
 def embed_descriptions():
@@ -74,8 +74,10 @@ def embed_descriptions():
 
         ids = [str(tool_id) for tool_id in tool_ids]
 
-        return [ids[i : i + BATCH_SIZE] for i in range(0, len(ids), BATCH_SIZE)]
-        # return [ids[:BATCH_SIZE]]
+        return [
+            ids[i : i + AIRFLOW_BATCH_SIZE]
+            for i in range(0, len(ids), AIRFLOW_BATCH_SIZE)
+        ]
 
     @task
     def embed_batch(tool_ids: list[str]) -> int:

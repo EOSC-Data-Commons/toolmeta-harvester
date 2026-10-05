@@ -29,7 +29,7 @@ def text_hash(text: str) -> str:
     dag_id="toolmeta_embedding_description",
     schedule=None,
     catchup=False,
-    max_active_tasks=100,
+    max_active_tasks=10,
     tags=["embedding"],
 )
 def embed_descriptions():

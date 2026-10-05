@@ -1,7 +1,9 @@
 import time
 
 import requests
-from transformers import AutoTokenizer
+
+# from transformers import AutoTokenizer
+from functools import lru_cache
 
 
 EMBEDDING_MODEL = "nomic-ai/nomic-embed-text-v2-moe"
@@ -14,7 +16,11 @@ MAX_TOKENS = 500
 API_BATCH_SIZE = 16
 
 
-_tokenizer = AutoTokenizer.from_pretrained(EMBEDDING_MODEL)
+@lru_cache(maxsize=1)
+def get_tokenizer():
+    from transformers import AutoTokenizer
+
+    return AutoTokenizer.from_pretrained(EMBEDDING_MODEL)
 
 
 def embed(
@@ -44,6 +50,8 @@ def embed(
     if not texts:
         return []
 
+    tokenizer = get_tokenizer()
+
     session = requests.Session()
     session.headers.update(
         {
@@ -59,7 +67,7 @@ def embed(
     for text in texts:
         prefixed = prefix + text
 
-        tokens = _tokenizer.encode(
+        tokens = tokenizer.encode(
             prefixed,
             add_special_tokens=False,
             truncation=True,
@@ -67,7 +75,7 @@ def embed(
         )
 
         prepared_texts.append(
-            _tokenizer.decode(
+            tokenizer.decode(
                 tokens,
                 skip_special_tokens=True,
             )

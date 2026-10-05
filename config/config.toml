@@ -17,3 +17,6 @@ api_url = "https://api.archives-ouvertes.fr/oai/hal/?verb=ListRecords&metadataPr
 [zenodo]
 record_api = "https://zenodo.org/api/records"
 
+[egi]
+llm_api_key="your_key"
+

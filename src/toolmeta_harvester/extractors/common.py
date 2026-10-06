@@ -449,6 +449,8 @@ def extract_io_entities(
                     "type": [],
                     "additional_type": None,
                     "encoding_format": None,
+                    "value_required": None,
+                    "default_value": None,
                 }
             )
             continue
@@ -474,6 +476,8 @@ def extract_io_entities(
                     entity.get("encodingFormat"),
                     resolver,
                 ),
+                "value_required": entity.get("valueRequired"),
+                "default_value": entity.get("defaultValue"),
             }
         )
 

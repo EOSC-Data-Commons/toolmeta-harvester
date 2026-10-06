@@ -19,4 +19,5 @@ record_api = "https://zenodo.org/api/records"
 
 [egi]
 llm_api_key="your_key"
+embedding_api=""
 

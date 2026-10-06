@@ -44,10 +44,6 @@ def get_vip_pipelines() -> list[dict]:
     """
     response = requests.get(
         TEST_VIP_API,
-        # params={
-        #     "public": "",
-        #     "format": "boutiques",
-        # },
         headers={
             "Accept": "application/json",
         },

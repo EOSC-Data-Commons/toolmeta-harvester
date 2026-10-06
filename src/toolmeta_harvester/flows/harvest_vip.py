@@ -124,9 +124,13 @@ def create_tool_metadata(
             "organizations",
             [],
         ),
-        types=metadata.get(
-            "types",
-            [],
+        types=list(
+            dict.fromkeys(
+                [
+                    *metadata.get("types", []),
+                    "Vip",
+                ]
+            )
         ),
         programming_languages=metadata.get(
             "programming_languages",

@@ -50,6 +50,11 @@ def egi_llm_api_key() -> str:
     return egi["llm_api_key"]
 
 
+def embedding_api() -> str:
+    egi = settings.egi
+    return egi["embedding_api"]
+
+
 def load_db_config() -> DatabaseConfig:
     db = settings.database
     return DatabaseConfig(

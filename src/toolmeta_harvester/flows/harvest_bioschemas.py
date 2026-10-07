@@ -264,7 +264,6 @@ def get_biotools_id_from_url(url: str) -> str:
 @dynamic_harvest(
     name="biotools",
     hosts=["bio.tools"],
-    default_schedule="0 2 * * 0",
 )
 def pipeline_harvest_biotools_url(
     url: str,
@@ -317,7 +316,7 @@ def harvest_biotools_record(
 
 @static_harvest(
     name="biotools_all",
-    default_schedule="0 3 * * *",
+    default_schedule="0 1 * * 0",
 )
 def pipeline_harvest_biotools(
     limit: int | None = None,

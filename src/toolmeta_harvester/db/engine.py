@@ -10,7 +10,7 @@ class Base(DeclarativeBase):
 db = load_db_config()
 
 engine = create_engine(
-    f"postgresql+psycopg://{db.user}:{db.password}@{db.host}/{db.name}",
+    f"postgresql+psycopg://{db.user}:{db.password}@{db.host}:{db.port}/{db.name}",
     echo=False,
     future=True,
 )

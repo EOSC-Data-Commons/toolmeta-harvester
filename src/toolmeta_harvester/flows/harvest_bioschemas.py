@@ -35,6 +35,7 @@ from toolmeta_harvester.tasks.biotools_bioschemas import (
     iter_biotools,
 )
 from toolmeta_harvester.flows.decorators import dynamic_harvest, static_harvest
+from sqlalchemy import select
 
 PIPELINE_VERSION = "0.1.0"
 
@@ -76,6 +77,22 @@ def parse_datetime(
         )
 
         return None
+
+
+def biotools_record_exists(
+    session: Session,
+    biotools_id: str,
+) -> bool:
+    stmt = (
+        select(ToolMetadata.id)
+        .where(
+            ToolMetadata.source_url == get_biotools_source_url(biotools_id),
+            ToolMetadata.source_identifier == biotools_id,
+        )
+        .limit(1)
+    )
+
+    return session.scalar(stmt) is not None
 
 
 def create_tool_metadata(
@@ -326,6 +343,7 @@ def pipeline_harvest_biotools(
 
     record_ids = []
     failed_ids = []
+    skipped = 0
 
     with Session(
         engine,
@@ -340,6 +358,13 @@ def pipeline_harvest_biotools(
 
                 try:
                     biotools_id = get_biotools_id(summary)
+                    if biotools_record_exists(session, biotools_id):
+                        skipped += 1
+                        logger.debug(
+                            "Skipping existing bio.tools record %s",
+                            biotools_id,
+                        )
+                        continue
 
                     logger.info(
                         "Harvesting bio.tools record %s",
@@ -373,8 +398,9 @@ def pipeline_harvest_biotools(
                     )
 
             logger.info(
-                "bio.tools harvest complete: %d harvested, %d failed",
+                "bio.tools harvest complete: %d new, %d skipped, %d failed",
                 len(record_ids),
+                skipped,
                 len(failed_ids),
             )
 

@@ -27,7 +27,7 @@ def text_hash(text: str) -> str:
 
 @dag(
     dag_id="toolmeta_embedding_description",
-    schedule=None,
+    schedule="0 4 * * 1",
     catchup=False,
     max_active_tasks=10,
     tags=["embedding"],

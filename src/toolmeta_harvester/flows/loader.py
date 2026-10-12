@@ -10,3 +10,4 @@ def load_flows() -> None:
     from toolmeta_harvester.flows import harvest_gitlab  # noqa: F401
     from toolmeta_harvester.flows import harvest_oscarhub  # noqa: F401
     from toolmeta_harvester.flows import harvest_vip  # noqa: F401
+    from toolmeta_harvester.flows import harvest_tool_list  # noqa: F401

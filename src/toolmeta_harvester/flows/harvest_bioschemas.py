@@ -428,8 +428,7 @@ def pipeline_harvest_biotools(
                     record_ids.append(biotools_id)
 
                     logger.info(
-                        "Stored bio.tools record %s: %s",
-                        biotools_id,
+                        "Stored bio.tools record title: %s",
                         record.title,
                     )
 

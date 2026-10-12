@@ -81,5 +81,5 @@ def create_generic_dag(flow):
 for flow in get_static_flows():
     dag_id = f"harvest_{flow.name}"
     globals()[dag_id] = create_static_dag(flow)
-    dag_id_test = f"harvest_{flow.name}_test"
-    globals()[dag_id_test] = create_test_static_dag(flow)
+    # dag_id_test = f"harvest_{flow.name}_test"
+    # globals()[dag_id_test] = create_test_static_dag(flow)

@@ -48,22 +48,6 @@ def is_custom_tool_list_url(url: str) -> bool:
     )
 
 
-# def get_codemeta(path: str) -> dict[str, Any]:
-#     """Fetch CodeMeta, allowing trailing commas in JSON."""
-#
-#     url = f"https://raw.githubusercontent.com/{OWNER}/{REPO}/{REF}/{path}"
-#
-#     response = requests.get(url, timeout=60)
-#     response.raise_for_status()
-#
-#     metadata = json5.loads(response.text)
-#
-#     if not isinstance(metadata, dict):
-#         raise ValueError(f"Invalid CodeMeta object: {path}")
-#
-#     return metadata
-
-
 def create_tool_metadata(
     *,
     repository: dict,

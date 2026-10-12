@@ -5,8 +5,6 @@ import logging
 from typing import Any
 from urllib.parse import urlparse, urlencode
 
-import json5
-import requests
 from sqlalchemy.orm import Session
 
 from toolmeta_harvester.db.engine import engine

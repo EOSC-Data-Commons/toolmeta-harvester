@@ -9,11 +9,7 @@ from sqlalchemy.orm import Session
 
 from toolmeta_harvester.db.engine import engine
 from toolmeta_harvester.db.models import Base, HarvestResult, ToolMetadata
-from toolmeta_harvester.extractors.common import (
-    as_list,
-    deduplicate_terms,
-    extract_io_entities,
-)
+from toolmeta_harvester.extractors.codemeta import extract_codemeta_metadata
 from toolmeta_harvester.flows.decorators import static_harvest
 from toolmeta_harvester.flows.harvest_github import (
     create_tool_metadata as create_github_tool_metadata,
@@ -69,64 +65,6 @@ def create_tool_metadata(
     )
 
 
-def extract_tool_metadata(
-    codemeta: dict[str, Any],
-) -> dict[str, Any]:
-    """Extract CodeMeta and nested software API parameters."""
-
-    types = as_list(codemeta.get("@type"))
-    categories = as_list(codemeta.get("applicationCategory"))
-
-    inputs = []
-    outputs = []
-
-    for software in as_list(codemeta.get("isSourceCodeOf")):
-        if not isinstance(software, dict):
-            continue
-
-        types.extend(as_list(software.get("@type")))
-
-        inputs.extend(as_list(software.get("inputParameter")))
-        outputs.extend(as_list(software.get("outputParameter")))
-
-    def normalise_parameter(value: Any) -> Any:
-        if not isinstance(value, dict):
-            return value
-
-        return {
-            "@id": value.get("@id") or value.get("identifier"),
-            "name": value.get("name"),
-            "description": value.get("description"),
-            "@type": value.get("@type"),
-            "additionalType": value.get("additionalType"),
-            "encodingFormat": value.get("encodingFormat"),
-        }
-
-    return {
-        "title": codemeta.get("name"),
-        "description": codemeta.get("description"),
-        "version": codemeta.get("version"),
-        "url": codemeta.get("url") or codemeta.get("codeRepository"),
-        "types": deduplicate_terms(types + categories),
-        "programming_languages": as_list(codemeta.get("programmingLanguage")),
-        "runtime_platforms": as_list(codemeta.get("runtimePlatform")),
-        "keywords": as_list(codemeta.get("keywords")),
-        "license": codemeta.get("license"),
-        "inputs": deduplicate_terms(
-            extract_io_entities(
-                inputs,
-                normalise_parameter,
-            )
-        ),
-        "outputs": deduplicate_terms(
-            extract_io_entities(
-                outputs,
-                normalise_parameter,
-            )
-        ),
-    }
-
-
 @static_harvest(
     name="custom_tool_list_all",
     default_schedule="0 20 * * 6",
@@ -172,7 +110,7 @@ def pipeline_harvest_custom_tool_list(
                     token="",
                 )
 
-                metadata = extract_tool_metadata(codemeta)
+                metadata = extract_codemeta_metadata(codemeta)
 
                 source_url = f"https://github.com/{OWNER}/{REPO}/tree/{REF}/{path}"
 

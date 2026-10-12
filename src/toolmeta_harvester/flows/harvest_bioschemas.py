@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import logging
 from datetime import datetime
+from datetime import timezone
 from sqlalchemy import func
 
 from sqlalchemy.dialects.postgresql import (
@@ -77,6 +78,43 @@ def parse_datetime(
         )
 
         return None
+
+
+def should_harvest_biotools_record(
+    session: Session,
+    summary: dict,
+) -> bool:
+    biotools_id = get_biotools_id(summary)
+
+    source_modified = parse_datetime(summary.get("lastUpdate"))
+
+    stored_modified = session.scalar(
+        select(ToolMetadata.date_modified).where(
+            ToolMetadata.source_url == get_biotools_source_url(biotools_id),
+            ToolMetadata.source_identifier == biotools_id,
+        )
+    )
+
+    # Check whether the record exists, even if its date is NULL.
+    existing = session.scalar(
+        select(ToolMetadata.id).where(
+            ToolMetadata.source_url == get_biotools_source_url(biotools_id),
+            ToolMetadata.source_identifier == biotools_id,
+        )
+    )
+
+    if existing is None:
+        return True
+
+    if source_modified is None:
+        return False
+
+    if stored_modified is None:
+        return True
+
+    return source_modified.astimezone(timezone.utc) > stored_modified.astimezone(
+        timezone.utc
+    )
 
 
 def biotools_record_exists(
@@ -358,13 +396,21 @@ def pipeline_harvest_biotools(
 
                 try:
                     biotools_id = get_biotools_id(summary)
-                    if biotools_record_exists(session, biotools_id):
+
+                    # Check actaul lastUpdate in bio.tools schema
+                    if not should_harvest_biotools_record(session, summary):
                         skipped += 1
-                        logger.debug(
-                            "Skipping existing bio.tools record %s",
-                            biotools_id,
-                        )
+                        logger.debug("Skipping unchanged tool %s", biotools_id)
                         continue
+
+                    # Simple existance check
+                    # if biotools_record_exists(session, biotools_id):
+                    #     skipped += 1
+                    #     logger.debug(
+                    #         "Skipping existing bio.tools record %s",
+                    #         biotools_id,
+                    #     )
+                    #     continue
 
                     logger.info(
                         "Harvesting bio.tools record %s",

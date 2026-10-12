@@ -38,7 +38,7 @@ from toolmeta_harvester.tasks.biotools_bioschemas import (
 from toolmeta_harvester.flows.decorators import dynamic_harvest, static_harvest
 from sqlalchemy import select
 
-PIPELINE_VERSION = "0.1.0"
+PIPELINE_VERSION = "0.1.1"
 
 PIPELINE_TAG = (
     f"{__name__.rsplit('.', 1)[-1].removeprefix('harvest_')}@{PIPELINE_VERSION}"
@@ -400,7 +400,7 @@ def pipeline_harvest_biotools(
                     # Check actaul lastUpdate in bio.tools schema
                     if not should_harvest_biotools_record(session, summary):
                         skipped += 1
-                        logger.debug("Skipping unchanged tool %s", biotools_id)
+                        logger.info("Skipping unchanged tool %s", biotools_id)
                         continue
 
                     # Simple existance check

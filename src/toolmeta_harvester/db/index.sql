@@ -37,9 +37,10 @@ ON tool_metadata
 USING bm25 (description)
 WITH (text_config = 'english');
 
-CREATE INDEX CONCURRENTLY ix_tool_metadata_types_gin
-ON tool_metadata
-USING gin (types);
+-- CREATE INDEX CONCURRENTLY ix_tool_metadata_types_gin
+-- ON tool_metadata
+-- USING gin (types);
+
 
 -- Incremental embedding / metadata updates
 CREATE INDEX CONCURRENTLY IF NOT EXISTS
@@ -68,3 +69,78 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS
     ix_tool_metadata_title_trgm
 ON tool_metadata
 USING gin (title gin_trgm_ops);
+
+-- add search_types field
+ALTER TABLE tool_metadata
+ADD COLUMN search_types text[] NOT NULL DEFAULT '{}';
+
+CREATE INDEX CONCURRENTLY ix_tool_metadata_types_gin
+ON tool_metadata
+USING gin (search_types);
+
+CREATE OR REPLACE FUNCTION update_tool_search_types()
+RETURNS trigger AS $$
+BEGIN
+    SELECT COALESCE(
+        ARRAY(
+            SELECT DISTINCT lower(trim(value))
+            FROM (
+                SELECT unnest(NEW.types) AS value
+
+                UNION ALL
+
+                SELECT obj->>'name'
+                FROM jsonb_array_elements(
+                    NEW.programming_languages
+                ) AS obj
+
+                UNION ALL
+
+                SELECT obj->>'name'
+                FROM jsonb_array_elements(
+                    NEW.runtime_platforms
+                ) AS obj
+
+                UNION ALL
+
+                SELECT obj->>'name'
+                FROM jsonb_array_elements(
+                    NEW.software_types
+                ) AS obj
+
+                UNION ALL
+
+                SELECT jsonb_array_elements_text(
+                    CASE
+                        WHEN jsonb_typeof(obj->'type') = 'array'
+                        THEN obj->'type'
+                        ELSE '[]'::jsonb
+                    END
+                )
+                FROM jsonb_array_elements(
+                    NEW.runtime_platforms
+                ) AS obj
+
+                UNION ALL
+
+                SELECT jsonb_array_elements_text(
+                    CASE
+                        WHEN jsonb_typeof(obj->'type') = 'array'
+                        THEN obj->'type'
+                        ELSE '[]'::jsonb
+                    END
+                )
+                FROM jsonb_array_elements(
+                    NEW.software_types
+                ) AS obj
+            ) AS values
+            WHERE value IS NOT NULL
+              AND trim(value) <> ''
+        ),
+        '{}'
+    )
+    INTO NEW.search_types;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;

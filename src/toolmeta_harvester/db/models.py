@@ -186,6 +186,26 @@ class ToolMetadata(Base):
     )
 
     # -------------------------------------------------------------
+    # Derived fields
+    # -------------------------------------------------------------
+    search_types: Mapped[list[str]] = mapped_column(
+        ARRAY(Text),
+        nullable=False,
+        server_default="{}",
+        comment=(
+            "Derived field: normalised, deduplicated type labels "
+            "extracted from types, programming_languages, "
+            "runtime_platforms and software_types. "
+            "Maintained automatically by a database trigger."
+        ),
+        info={
+            "derived": True,
+            "internal": True,
+            "indexed": True,
+        },
+    )
+
+    # -------------------------------------------------------------
     # Source preservation
     # -------------------------------------------------------------
 
@@ -237,9 +257,14 @@ class ToolMetadata(Base):
             postgresql_ops={"title": "gin_trgm_ops"},
         ),
         # Array membership searches
+        # Index(
+        #     "ix_tool_metadata_types_gin",
+        #     "types",
+        #     postgresql_using="gin",
+        # ),
         Index(
-            "ix_tool_metadata_types_gin",
-            "types",
+            "ix_tool_metadata_search_types_gin",
+            "search_types",
             postgresql_using="gin",
         ),
         Index(

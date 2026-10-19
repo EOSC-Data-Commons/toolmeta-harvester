@@ -73,5 +73,5 @@ def ensure_tool_search_types_trigger(engine: Engine) -> None:
     """Create or replace the trigger maintaining search_types."""
 
     with engine.begin() as conn:
-        conn.execute(text(CREATE_SEARCH_TYPES_FUNCTION))
-        conn.execute(text(CREATE_SEARCH_TYPES_TRIGGER))
+        conn.execute(CREATE_SEARCH_TYPES_FUNCTION)
+        conn.execute(CREATE_SEARCH_TYPES_TRIGGER)

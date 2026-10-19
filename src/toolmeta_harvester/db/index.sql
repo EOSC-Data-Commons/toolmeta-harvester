@@ -1,3 +1,4 @@
+-- Embedding index
 CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_tool_embeddings_description_hnsw
 ON tool_embeddings USING hnsw (vector vector_cosine_ops)
 WHERE embedding_type = 'description'
@@ -23,8 +24,7 @@ ON tool_embeddings USING hnsw (vector vector_cosine_ops)
 WHERE embedding_type = 'keywords'
   AND embedding_model = 'nomic-embed-text-v2-moe';
 
-#---tool_metadata----
-
+-- Tool metadata index
 CREATE EXTENSION IF NOT EXISTS pg_textsearch;
 
 CREATE INDEX ix_tool_metadata_title_bm25

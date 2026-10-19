@@ -21,13 +21,13 @@ def test_toolmeta_import():
         }
 
     @task
-    def test_initialise_db():
+    def test_initialize_db():
         from toolmeta_harvester.db import database
 
-        database.initialise_db()
+        database.initialize_db()
 
     t1 = test_import()
-    t2 = test_initialise_db()
+    t2 = test_initialize_db()
 
     t1 >> t2
 

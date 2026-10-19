@@ -75,3 +75,19 @@ def ensure_tool_search_types_trigger(engine: Engine) -> None:
     with engine.begin() as conn:
         conn.execute(CREATE_SEARCH_TYPES_FUNCTION)
         conn.execute(CREATE_SEARCH_TYPES_TRIGGER)
+
+
+def populate_tool_search_types(engine: Engine) -> int:
+    """Populate missing or empty search_types using the database trigger."""
+
+    with engine.begin() as conn:
+        result = conn.execute(
+            text("""
+                UPDATE tool_metadata
+                SET types = types
+                WHERE search_types IS NULL
+                   OR search_types = '{}';
+            """)
+        )
+
+        return result.rowcount

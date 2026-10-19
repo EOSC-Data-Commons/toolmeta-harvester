@@ -8,6 +8,7 @@ from sqlalchemy.dialects.postgresql import insert
 from toolmeta_harvester.config import egi_llm_api_key, embedding_api
 from toolmeta_harvester.db.engine import engine
 
+from toolmeta_harvester.db import database
 from toolmeta_harvester.db.models import Base, ToolMetadata, ToolEmbedding
 from toolmeta_harvester.tasks import embedding
 
@@ -36,7 +37,8 @@ def embed_descriptions():
 
     @task
     def initialise_db():
-        Base.metadata.create_all(engine)
+        # Base.metadata.create_all(engine)
+        database.initialise_db()
 
     @task
     def create_batches() -> list[list[str]]:

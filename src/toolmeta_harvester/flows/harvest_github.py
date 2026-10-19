@@ -23,6 +23,7 @@ from toolmeta_harvester.converters.pyproject_jsonld import (
     convert_pyproject_to_jsonld,
 )
 from toolmeta_harvester.db.engine import engine
+from toolmeta_harvester.db.database import initialize_db
 from toolmeta_harvester.db.models import (
     Base,
     ToolMetadata,
@@ -255,7 +256,8 @@ def pipeline_harvest_github(
     *,
     token: str | None = None,
 ) -> HarvestResult:
-    Base.metadata.create_all(engine)
+    # Base.metadata.create_all(engine)
+    initialize_db()
 
     token = token or os.getenv("GITHUB_TOKEN")
     # owner, repo = parse_github_url(repository_url)

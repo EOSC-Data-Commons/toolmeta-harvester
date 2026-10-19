@@ -11,8 +11,9 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from toolmeta_harvester.db.engine import engine
+from toolmeta_harvester.db.database import initialize_db
 from toolmeta_harvester.db.models import (
-    Base,
+    # Base,
     HarvestResult,
     ToolMetadata,
 )
@@ -521,7 +522,8 @@ def pipeline_harvest_workflowhub_url(
     workflow_url: str,
     force: bool = False,
 ) -> HarvestResult:
-    Base.metadata.create_all(engine)
+    # Base.metadata.create_all(engine)
+    initialize_db()
 
     (
         workflow_id,
@@ -576,7 +578,8 @@ def pipeline_harvest_workflowhub(
     Harvest WorkflowHub JSON metadata and persist its
     normalised representation in PostgreSQL.
     """
-    Base.metadata.create_all(engine)
+    # Base.metadata.create_all(engine)
+    initialize_db()
 
     workflows = get_hub_workflows(use_cache=use_cache)
 

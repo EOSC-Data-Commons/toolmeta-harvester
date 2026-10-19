@@ -17,6 +17,7 @@ from toolmeta_harvester.converters.biotools_jsonld import (
 from toolmeta_harvester.db.engine import (
     engine,
 )
+from toolmeta_harvester.db.database import initialize_db
 from toolmeta_harvester.db.models import (
     Base,
     ToolMetadata,
@@ -377,7 +378,8 @@ def pipeline_harvest_biotools(
     limit: int | None = None,
     per_page: int = 50,
 ) -> HarvestResult:
-    Base.metadata.create_all(engine)
+    # Base.metadata.create_all(engine)
+    initialize_db()
 
     record_ids = []
     failed_ids = []

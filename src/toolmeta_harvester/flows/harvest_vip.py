@@ -10,6 +10,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from toolmeta_harvester.db.engine import engine
+from toolmeta_harvester.db.database import initialize_db
 from toolmeta_harvester.db.models import (
     Base,
     HarvestResult,
@@ -252,7 +253,8 @@ def harvest_pipeline(
 def pipeline_harvest_vip(
     limit: int | None = None,
 ) -> HarvestResult:
-    Base.metadata.create_all(engine)
+    # Base.metadata.create_all(engine)
+    initialize_db()
 
     descriptors = get_vip_pipelines()
 

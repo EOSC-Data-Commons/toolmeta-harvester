@@ -216,6 +216,51 @@ class ToolMetadata(Base):
             "source_identifier",
             name="uq_tool_metadata_source",
         ),
+        # Full-text search
+        Index(
+            "ix_tool_metadata_title_bm25",
+            "title",
+            postgresql_using="bm25",
+            postgresql_with={"text_config": "english"},
+        ),
+        Index(
+            "ix_tool_metadata_description_bm25",
+            "description",
+            postgresql_using="bm25",
+            postgresql_with={"text_config": "english"},
+        ),
+        # Fuzzy / substring title search
+        Index(
+            "ix_tool_metadata_title_trgm",
+            "title",
+            postgresql_using="gin",
+            postgresql_ops={"title": "gin_trgm_ops"},
+        ),
+        # Array membership searches
+        Index(
+            "ix_tool_metadata_types_gin",
+            "types",
+            postgresql_using="gin",
+        ),
+        Index(
+            "ix_tool_metadata_keywords_gin",
+            "keywords",
+            postgresql_using="gin",
+        ),
+        # Incremental harvesting and embedding
+        Index(
+            "ix_tool_metadata_date_modified",
+            "date_modified",
+        ),
+        Index(
+            "ix_tool_metadata_harvested_at",
+            "harvested_at",
+        ),
+        # Filter by harvesting pipeline
+        Index(
+            "ix_tool_metadata_pipeline_tag",
+            "pipeline_tag",
+        ),
     )
 
 

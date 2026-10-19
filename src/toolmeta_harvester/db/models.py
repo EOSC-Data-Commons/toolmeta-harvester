@@ -12,6 +12,8 @@ from sqlalchemy import (
     Float,
     func,
     UniqueConstraint,
+    Index,
+    text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -19,6 +21,16 @@ from pgvector.sqlalchemy import Vector
 
 from dataclasses import dataclass
 from toolmeta_harvester.db.engine import Base
+
+EMBEDDING_TYPES = [
+    "description",
+    "description_enriched_01",
+    "description_enriched_02",
+    "authors",
+    "keywords",
+]
+
+EMBEDDING_MODEL = "nomic-embed-text-v2-moe"
 
 
 @dataclass(frozen=True)
@@ -259,5 +271,24 @@ class ToolEmbedding(Base):
             "embedding_type",
             "embedding_model",
             name="uq_tool_embedding",
+        ),
+        *(
+            Index(
+                f"ix_tool_embeddings_{embedding_type}_hnsw",
+                "vector",
+                postgresql_using="hnsw",
+                postgresql_ops={
+                    "vector": "vector_cosine_ops",
+                },
+                postgresql_with={
+                    "m": 16,
+                    "ef_construction": 64,
+                },
+                postgresql_where=text(
+                    f"embedding_type = '{embedding_type}' "
+                    f"AND embedding_model = '{EMBEDDING_MODEL}'"
+                ),
+            )
+            for embedding_type in EMBEDDING_TYPES
         ),
     )

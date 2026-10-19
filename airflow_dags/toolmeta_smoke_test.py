@@ -27,7 +27,7 @@ def test_toolmeta_import():
         database.initialise_db()
 
     t1 = test_import()
-    t2 = test_initialise_db
+    t2 = test_initialise_db()
 
     t1 >> t2
 

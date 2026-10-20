@@ -20,7 +20,16 @@ def test_toolmeta_import():
             "harvest_url": str(harvest_url),
         }
 
-    test_import()
+    @task
+    def test_initialize_db():
+        from toolmeta_harvester.db import database
+
+        database.initialize_db()
+
+    t1 = test_import()
+    t2 = test_initialize_db()
+
+    t1 >> t2
 
 
 test_toolmeta_import()

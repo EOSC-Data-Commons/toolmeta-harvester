@@ -8,6 +8,7 @@ from urllib.parse import urlparse, urlencode
 from sqlalchemy.orm import Session
 
 from toolmeta_harvester.db.engine import engine
+from toolmeta_harvester.db.database import initialize_db
 from toolmeta_harvester.db.models import Base, HarvestResult, ToolMetadata
 from toolmeta_harvester.extractors.codemeta import extract_codemeta_metadata
 from toolmeta_harvester.flows.decorators import static_harvest
@@ -85,7 +86,8 @@ def pipeline_harvest_custom_tool_list(
         token="",
     )
 
-    Base.metadata.create_all(engine)
+    # Base.metadata.create_all(engine)
+    initialize_db()
 
     record_ids: list[str] = []
     failed_record_ids: list[str] = []

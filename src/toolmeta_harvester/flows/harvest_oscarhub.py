@@ -8,6 +8,7 @@ from urllib.parse import urlencode, urlparse
 from sqlalchemy.orm import Session
 
 from toolmeta_harvester.db.engine import engine
+from toolmeta_harvester.db.database import initialize_db
 from toolmeta_harvester.db.models import Base, HarvestResult, ToolMetadata
 from toolmeta_harvester.extractors.common import (
     as_list,
@@ -124,7 +125,8 @@ def pipeline_harvest_oscarhub(
 
     # An empty token explicitly disables authentication, including environment tokens.
     entries = get_directory(OWNER, REPO, "crates", ref=REF, token="")
-    Base.metadata.create_all(engine)
+    # Base.metadata.create_all(engine)
+    initialize_db()
     record_ids: list[str] = []
     failed_record_ids: list[str] = []
 

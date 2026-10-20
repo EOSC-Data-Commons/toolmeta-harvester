@@ -10,6 +10,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from toolmeta_harvester.db.engine import engine
+from toolmeta_harvester.db.database import initialize_db
 from toolmeta_harvester.db.models import (
     Base,
     HarvestResult,
@@ -327,7 +328,8 @@ def pipeline_harvest_rsd(
     normalized using the common CodeMeta extractor.
     """
 
-    Base.metadata.create_all(engine)
+    # Base.metadata.create_all(engine)
+    initialize_db()
 
     # software_records = get_rsd_software(limit=limit)
 

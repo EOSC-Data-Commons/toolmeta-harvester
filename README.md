@@ -89,28 +89,34 @@ orchestration. Its stages live in `src/toolmeta_harvester/enrichment/`:
 3. **Validation** checks the generated result with deterministic schema checks
    and a separate LLM review. Scores range from 0 (unsupported/unusable) to 5
    (strongly supported/useful); they are advisory, not ground truth.
-4. **Embedding** is a separate manual stage that embeds validated
-   `enriched_description` text in the existing 768-dimensional
-   `ToolEmbedding` model. It is not run as part of the initial LLM experiment.
+4. **Embedding** embeds validated `enriched_description` text in the existing
+   768-dimensional `ToolEmbedding` store and links each vector to its
+   enrichment result.
 
-`tool_metadata` now stores `input_description`, `output_description`,
-`semantic_metadata` JSONB, `enriched_description`, `enrichment_status`,
-`enrichment_input_hash`, `enrichment_version`, `enrichment_error`,
-`enrichment_failed_stage`, `enrichment_validation` JSONB, and `enriched_at`.
-The input hash covers only the fields sent to extraction. A source change makes
-the record eligible for re-enrichment. Statuses include `pending`, `processing`,
-`extracted`, `generated`, `validated`, and `failed`; retries resume at the
-failed stage. A new prompt version also makes its stage eligible again when
-the source metadata hash is unchanged.
+Enrichment data is kept out of `tool_metadata`. `tool_enrichment_runs` stores
+the requested model and prompt version for each stage plus the experiment
+status. `tool_enrichments` stores each tool's extracted fields, enriched
+description, validation, input hash, and the model name reported by the API for
+each stage. The `(tool_id, run_id)` key allows multiple model/prompt runs to be
+compared without overwriting earlier results. Embeddings link to one specific
+enrichment row, so they remain comparable too. If an API response omits its
+model name, the actual-model column stays NULL; the requested model remains
+available on the run. Fallback models are disabled so a request cannot silently
+switch models without provenance.
+
+The input hash covers only the fields sent to extraction. Statuses include
+`pending`, `processing`, `extracted`, `generated`, `validated`, and `failed`;
+retries within a run resume at the failed stage. Prompt versions such as
+`extraction_v1` are stored separately from the requested and API-reported model
+names.
 
 The local database was already stamped at revision `7fff94b25184`, which was
 not included in this checkout. The added no-op bridge records the inspected
-schema baseline. Migration `8c25d72b21a4` adds enrichment columns and
-`9be70ae85cc1` installs the pgvector extension and creates the
-`tool_embeddings` table from the existing ORM model. These migrations were
-applied locally. The pre-migration database had 37,494 tool records and no
-embedding table or rows; the migration preserved all source records and left
-their embedding count at zero.
+schema baseline. Migration `a13c45ee79d1` moves prior enrichment data into a
+legacy run and creates the experiment-aware tables. Legacy model response names
+were not stored and remain NULL; the configured model is retained as requested
+model provenance. The migration also links embeddings to a specific enrichment
+and preserves source metadata.
 
 ### Prompts, configuration, and operation
 
@@ -125,9 +131,12 @@ Configure the EGI chat client with environment variables:
 
 | Variable | Default / purpose |
 | --- | --- |
-| `LLM_EGI_API_URL` | `https://llm.ai.egi.eu/chat/completions` |
+| `LLM_EGI_API_URL` | `https://llm.ai.egi.eu/v1/chat/completions` |
 | `LLM_EGI_API_KEY` | Required secret; do not commit or log it |
 | `LLM_EGI_MODEL` | `qwen3.8-27b` |
+| `LLM_EGI_EXTRACTION_MODEL` | Optional stage override; defaults to `LLM_EGI_MODEL` |
+| `LLM_EGI_GENERATION_MODEL` | Optional stage override; defaults to `LLM_EGI_MODEL` |
+| `LLM_EGI_VALIDATION_MODEL` | Optional stage override; defaults to `LLM_EGI_MODEL` |
 | `LLM_EGI_TIMEOUT` | 180 seconds per request |
 | `LLM_EGI_MAX_RETRIES` | 3 retries for transient failures |
 
@@ -155,15 +164,24 @@ Run the deterministic 100-record experiment from the repository root:
 ```sh
 uv sync --group dev
 PYTHONPATH=src uv run alembic upgrade head
-PYTHONPATH=src uv run python -m toolmeta_harvester.enrichment.experiment
+PYTHONPATH=src uv run python -m toolmeta_harvester.enrichment.experiment \
+  --stage all --with-embeddings
 ```
+
+The command prints a `run_id`; pass it with `--run-id` when running a later
+single stage. Extraction creates a run automatically when no ID is supplied.
+Generation, validation, and embedding require the run ID so they cannot mix
+results from different experiments.
 
 The sample reserves one record per available metadata source, then allocates
 the remaining slots proportionally. For the audited database that produces
 87 BioTools, 5 WorkflowHub, 5 CodeMeta, and one record from each of Boutiques,
 RO-Crate, and JSON-LD. Ordering within each source is based on a stable hash of
-the record ID. The resulting manual review export is written to
-`.experiment-output/tool_enrichment_100.jsonl` (ignored by Git).
+the record ID. The resulting manual review export contains actual per-stage
+model names. The review query in
+[`reports/enrichment_manual_review.sql`](reports/enrichment_manual_review.sql)
+joins source metadata, enriched attributes, run configuration, validation,
+model provenance, and the linked vector.
 
 The four manually triggered Airflow DAGs are:
 
@@ -171,6 +189,10 @@ The four manually triggered Airflow DAGs are:
 - `tool_metadata_enrichment_generation`
 - `tool_metadata_enrichment_validation`
 - `toolmeta_enriched_description_embedding`
+
+For generation, validation, and embedding DAGs, pass `{"run_id": "<UUID>"}`
+in the Airflow run configuration. The extraction DAG can create a run and logs
+its ID for subsequent stages.
 
 ### Experiment outcome and limitations
 
@@ -181,19 +203,8 @@ the new DAG file. Airflow also reported existing import errors in legacy DAGs
 that depend on missing environment variables or packages in the main Airflow
 Python environment.
 
-The 100-record experiment has **not completed**. The host endpoint responded,
-and an unauthenticated diagnostic received HTTP 401 promptly, but authenticated
-chat-completion requests using the provided request shape did not return within
-180 seconds. A streaming request also timed out after 120 seconds. No records
-were submitted to the pipeline, no LLM results or validation scores were
-persisted, and the manual review JSONL was not generated. The database therefore
-still has 37,494 records in `pending` status. Retry the experiment when the EGI
-inference service is returning completions; the CLI resumes completed stages
-and stores per-record failures when a run reaches the model.
-
-The feasibility run will not establish retrieval improvements. BioTools makes
-up most of the sample population; sparse inputs and outputs may remain unknown;
-and LLM validation is supplementary. Manual review of the generated JSONL is
-required before treating enriched descriptions as trustworthy. Follow-up work
-is to complete and inspect the 100-record run, refine prompts based on those
-reviews, and only then run the separate embedding stage.
+The experiment outcome is recorded per run in the database. Use the exported
+review JSONL and `reports/enrichment_manual_review.sql` to inspect source
+metadata alongside extracted fields, model provenance, validation, and
+embeddings. LLM validation is advisory; manual review remains necessary before
+treating enriched descriptions as authoritative.

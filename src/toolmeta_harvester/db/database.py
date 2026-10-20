@@ -4,7 +4,12 @@ from sqlalchemy.schema import CreateColumn
 
 from sqlalchemy import inspect, text
 from toolmeta_harvester.db.engine import Base, engine
-from toolmeta_harvester.db.models import ToolMetadata, ToolEmbedding
+from toolmeta_harvester.db.models import (
+    ToolEmbedding,
+    ToolEnrichment,
+    ToolEnrichmentRun,
+    ToolMetadata,
+)
 from toolmeta_harvester.db.triggers import (
     ensure_tool_search_types_trigger,
     populate_tool_search_types,
@@ -15,12 +20,14 @@ logger = logging.getLogger(__name__)
 
 TABLES = [
     ToolMetadata.__table__,
+    ToolEnrichmentRun.__table__,
+    ToolEnrichment.__table__,
     ToolEmbedding.__table__,
 ]
 
 
 def ensure_indexes(engine: Engine) -> None:
-    """Create missing indexes for ToolMetadata and ToolEmbedding."""
+    """Create missing indexes for registered harvester tables."""
 
     with engine.begin() as conn:
         for table in TABLES:

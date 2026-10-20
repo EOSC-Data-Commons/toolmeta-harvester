@@ -13,9 +13,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Index,
-    text,
-    DDL,
-    event,
+    text as sql_text,
     func,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
@@ -27,6 +25,7 @@ EMBEDDING_TYPES = [
     "description",
     "description_enriched_01",
     "description_enriched_02",
+    "enriched_description",
     "authors",
     "keywords",
 ]
@@ -231,22 +230,6 @@ class ToolMetadata(Base):
 
     date_modified: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
-    # LLM enrichment experiment. These columns are additive and source metadata
-    # remains the authoritative record.
-    input_description: Mapped[str | None] = mapped_column(Text)
-    output_description: Mapped[str | None] = mapped_column(Text)
-    semantic_metadata: Mapped[dict | None] = mapped_column(JSONB)
-    enriched_description: Mapped[str | None] = mapped_column(Text)
-    enrichment_status: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="pending", server_default="pending"
-    )
-    enrichment_input_hash: Mapped[str | None] = mapped_column(String(64))
-    enrichment_version: Mapped[str | None] = mapped_column(String(100))
-    enrichment_error: Mapped[str | None] = mapped_column(Text)
-    enrichment_failed_stage: Mapped[str | None] = mapped_column(String(20))
-    enrichment_validation: Mapped[dict | None] = mapped_column(JSONB)
-    enriched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-
     __table_args__ = (
         UniqueConstraint(
             "source_url",
@@ -306,6 +289,75 @@ class ToolMetadata(Base):
     )
 
 
+class ToolEnrichmentRun(Base):
+    """Configuration and lifecycle for one comparable enrichment experiment."""
+
+    __tablename__ = "tool_enrichment_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(30), nullable=False, default="running", server_default="running"
+    )
+    requested_extraction_model: Mapped[str] = mapped_column(String(200), nullable=False)
+    requested_generation_model: Mapped[str] = mapped_column(String(200), nullable=False)
+    requested_validation_model: Mapped[str] = mapped_column(String(200), nullable=False)
+    extraction_prompt_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    generation_prompt_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    validation_prompt_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    sample_size: Mapped[int] = mapped_column(nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ToolEnrichment(Base):
+    """One tool's enrichment result within a specific model/prompt run."""
+
+    __tablename__ = "tool_enrichments"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tool_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tool_metadata.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    run_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tool_enrichment_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="pending", server_default="pending"
+    )
+    input_hash: Mapped[str | None] = mapped_column(String(64))
+    input_description: Mapped[str | None] = mapped_column(Text)
+    output_description: Mapped[str | None] = mapped_column(Text)
+    semantic_metadata: Mapped[dict | None] = mapped_column(JSONB)
+    enriched_description: Mapped[str | None] = mapped_column(Text)
+    validation: Mapped[dict | None] = mapped_column(JSONB)
+    extraction_model: Mapped[str | None] = mapped_column(String(200))
+    generation_model: Mapped[str | None] = mapped_column(String(200))
+    validation_model: Mapped[str | None] = mapped_column(String(200))
+    extraction_prompt_version: Mapped[str | None] = mapped_column(String(100))
+    generation_prompt_version: Mapped[str | None] = mapped_column(String(100))
+    validation_prompt_version: Mapped[str | None] = mapped_column(String(100))
+    error: Mapped[str | None] = mapped_column(Text)
+    failed_stage: Mapped[str | None] = mapped_column(String(20))
+    enriched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        UniqueConstraint("tool_id", "run_id", name="uq_tool_enrichment_run"),
+        Index("ix_tool_enrichments_run_status", "run_id", "status"),
+    )
+
+
 class ToolEmbedding(Base):
     """A single embedding derived from a tool metadata record."""
 
@@ -321,6 +373,13 @@ class ToolEmbedding(Base):
         UUID(as_uuid=True),
         ForeignKey("tool_metadata.id", ondelete="CASCADE"),
         nullable=False,
+        index=True,
+    )
+
+    enrichment_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tool_enrichments.id", ondelete="CASCADE"),
+        nullable=True,
         index=True,
     )
 
@@ -353,12 +412,6 @@ class ToolEmbedding(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint(
-            "tool_id",
-            "embedding_type",
-            "embedding_model",
-            name="uq_tool_embedding",
-        ),
         *(
             Index(
                 f"ix_tool_embeddings_{embedding_type}_hnsw",
@@ -371,11 +424,27 @@ class ToolEmbedding(Base):
                     "m": 16,
                     "ef_construction": 64,
                 },
-                postgresql_where=text(
+                postgresql_where=sql_text(
                     f"embedding_type = '{embedding_type}' "
                     f"AND embedding_model = '{EMBEDDING_MODEL}'"
                 ),
             )
             for embedding_type in EMBEDDING_TYPES
+        ),
+        Index(
+            "uq_tool_embedding_source",
+            "tool_id",
+            "embedding_type",
+            "embedding_model",
+            unique=True,
+            postgresql_where=sql_text("enrichment_id IS NULL"),
+        ),
+        Index(
+            "uq_tool_enrichment_embedding",
+            "enrichment_id",
+            "embedding_type",
+            "embedding_model",
+            unique=True,
+            postgresql_where=sql_text("enrichment_id IS NOT NULL"),
         ),
     )

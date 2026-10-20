@@ -1,27 +1,26 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 from datetime import datetime
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     DateTime,
+    Float,
     ForeignKey,
-    Integer,
     String,
     Text,
-    Float,
-    func,
     UniqueConstraint,
     Index,
     text,
     DDL,
     event,
+    func,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
-from pgvector.sqlalchemy import Vector
 
-from dataclasses import dataclass
 from toolmeta_harvester.db.engine import Base
 
 EMBEDDING_TYPES = [
@@ -231,6 +230,22 @@ class ToolMetadata(Base):
     date_published: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     date_modified: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # LLM enrichment experiment. These columns are additive and source metadata
+    # remains the authoritative record.
+    input_description: Mapped[str | None] = mapped_column(Text)
+    output_description: Mapped[str | None] = mapped_column(Text)
+    semantic_metadata: Mapped[dict | None] = mapped_column(JSONB)
+    enriched_description: Mapped[str | None] = mapped_column(Text)
+    enrichment_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="pending", server_default="pending"
+    )
+    enrichment_input_hash: Mapped[str | None] = mapped_column(String(64))
+    enrichment_version: Mapped[str | None] = mapped_column(String(100))
+    enrichment_error: Mapped[str | None] = mapped_column(Text)
+    enrichment_failed_stage: Mapped[str | None] = mapped_column(String(20))
+    enrichment_validation: Mapped[dict | None] = mapped_column(JSONB)
+    enriched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (
         UniqueConstraint(

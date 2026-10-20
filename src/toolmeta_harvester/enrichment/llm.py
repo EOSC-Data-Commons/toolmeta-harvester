@@ -4,11 +4,19 @@ import json
 import os
 import re
 import time
+from dataclasses import dataclass
 from typing import Any
 
 import requests
 
 from toolmeta_harvester.config import egi_llm_api_key, egi_llm_api_url, egi_llm_model
+
+
+@dataclass(frozen=True)
+class LLMCompletion:
+    data: dict[str, Any]
+    requested_model: str
+    actual_model: str | None
 
 
 class EgiChatClient:
@@ -37,7 +45,7 @@ class EgiChatClient:
         if not self.api_key or self.api_key.casefold() in {"your_key", "changeme"}:
             raise ValueError("LLM_EGI_API_KEY must be configured")
 
-    def complete_json(self, system_prompt: str, user_prompt: str) -> dict[str, Any]:
+    def complete_json(self, system_prompt: str, user_prompt: str) -> LLMCompletion:
         last_error: Exception | None = None
         for attempt in range(self.retries + 1):
             try:
@@ -68,10 +76,14 @@ class EgiChatClient:
                     raise RuntimeError(
                         f"EGI chat completion returned HTTP {response.status_code}"
                     )
-                content = self._response_content(response)
+                content, actual_model = self._response_content(response)
                 if not isinstance(content, str) or not content.strip():
                     raise ValueError("EGI chat completion returned empty content")
-                return self._parse_json(content)
+                return LLMCompletion(
+                    data=self._parse_json(content),
+                    requested_model=self.model,
+                    actual_model=actual_model,
+                )
             except (requests.Timeout, requests.ConnectionError) as exc:
                 last_error = exc
                 if attempt == self.retries:
@@ -90,13 +102,14 @@ class EgiChatClient:
         ) from last_error
 
     @staticmethod
-    def _response_content(response: requests.Response) -> str:
+    def _response_content(response: requests.Response) -> tuple[str, str | None]:
         content_type = response.headers.get("Content-Type", "").casefold()
         if "text/event-stream" not in content_type:
             body = response.json()
-            return body["choices"][0]["message"]["content"]
+            return body["choices"][0]["message"]["content"], body.get("model")
 
         chunks: list[str] = []
+        actual_model: str | None = None
         for line in response.iter_lines(decode_unicode=True):
             if isinstance(line, bytes):
                 line = line.decode("utf-8", errors="replace")
@@ -109,6 +122,8 @@ class EgiChatClient:
                 body = json.loads(event)
             except json.JSONDecodeError as exc:
                 raise ValueError("Malformed EGI streaming response") from exc
+            if isinstance(body.get("model"), str):
+                actual_model = body["model"]
             choices = body.get("choices") or []
             if not choices:
                 continue
@@ -116,7 +131,7 @@ class EgiChatClient:
             part = delta.get("content")
             if isinstance(part, str):
                 chunks.append(part)
-        return "".join(chunks)
+        return "".join(chunks), actual_model
 
     @staticmethod
     def _parse_json(content: str) -> dict[str, Any]:

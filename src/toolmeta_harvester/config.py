@@ -53,7 +53,7 @@ def egi_llm_api_key() -> str:
 def egi_llm_api_url() -> str:
     return os.environ.get(
         "LLM_EGI_API_URL",
-        settings.get("egi.llm_api_url", "https://llm.ai.egi.eu/chat/completions"),
+        settings.get("egi.llm_api_url", "https://llm.ai.egi.eu/v1/chat/completions"),
     )
 
 
@@ -62,6 +62,14 @@ def egi_llm_model() -> str:
         "LLM_EGI_MODEL",
         settings.get("egi.llm_model", "qwen3.8-27b"),
     )
+
+
+def egi_llm_stage_model(stage: str) -> str:
+    """Resolve a fixed model for one stage, falling back to the run-wide model."""
+    if stage not in {"extraction", "generation", "validation"}:
+        raise ValueError(f"Unsupported LLM stage: {stage}")
+    env_key = f"LLM_EGI_{stage.upper()}_MODEL"
+    return os.environ.get(env_key, egi_llm_model())
 
 
 def embedding_api() -> str:

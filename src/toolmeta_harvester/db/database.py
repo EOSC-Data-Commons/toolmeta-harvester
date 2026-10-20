@@ -6,6 +6,12 @@ from sqlalchemy.schema import CreateColumn
 
 from toolmeta_harvester.db.engine import Base, engine
 from toolmeta_harvester.db.models import (
+    ToolEmbedding,
+    ToolEnrichment,
+    ToolEnrichmentRun,
+    ToolMetadata,
+)
+from toolmeta_harvester.db.models import (
     ToolMetadata,
     ToolEmbedding,
     HarvestSource,
@@ -23,12 +29,37 @@ logger = logging.getLogger(__name__)
 SCHEMA_VERSION = 1
 TABLES = [
     ToolMetadata.__table__,
+    ToolEnrichmentRun.__table__,
+    ToolEnrichment.__table__,
     ToolEmbedding.__table__,
     HarvestSource.__table__,
 ]
 
 # Acquire a database lock since multiple DAGs can simaltaneously initialize the db
 INIT_LOCK_ID = 7355608
+
+def ensure_indexes(engine: Engine) -> None:
+    """Create missing indexes for registered harvester tables."""
+
+    with engine.begin() as conn:
+        for table in TABLES:
+            existing = {
+                index["name"] for index in inspect(conn).get_indexes(table.name)
+            }
+
+            for index in table.indexes:
+                if index.name in existing:
+                    logger.debug(
+                        "Index already exists: %s",
+                        index.name,
+                    )
+                    continue
+
+                logger.info(
+                    "Creating index: %s on %s",
+                    index.name,
+                    table.name,
+                )
 
 
 def ensure_columns(conn: Connection) -> None:

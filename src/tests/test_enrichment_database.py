@@ -1,4 +1,4 @@
-"""Opt-in persistence smoke test for a migrated local PostgreSQL database."""
+"""Opt-in persistence smoke test for the experiment-aware enrichment schema."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import pytest
 from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import Session
 
-from toolmeta_harvester.db.models import ToolMetadata
+from toolmeta_harvester.db.models import ToolEnrichment, ToolEnrichmentRun, ToolMetadata
 
 DATABASE_URL = os.environ.get("TOOLMETA_TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(
@@ -18,66 +18,80 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def test_enrichment_columns_persist_and_model_matches_schema():
+def test_enrichment_results_and_actual_models_persist_separately():
     engine = create_engine(DATABASE_URL)
     inspector = inspect(engine)
-    columns = {column["name"] for column in inspector.get_columns("tool_metadata")}
-    expected = {
-        "input_description",
-        "output_description",
-        "semantic_metadata",
-        "enriched_description",
-        "enrichment_status",
-        "enrichment_input_hash",
-        "enrichment_version",
-        "enrichment_error",
-        "enrichment_failed_stage",
-        "enrichment_validation",
-        "enriched_at",
+    tables = set(inspector.get_table_names())
+    assert {"tool_enrichment_runs", "tool_enrichments", "tool_embeddings"} <= tables
+    assert "enrichment_status" not in {
+        column["name"] for column in inspector.get_columns("tool_metadata")
     }
-    assert expected <= columns
-    assert "tool_embeddings" in inspector.get_table_names()
-    embedding_columns = {
-        column["name"] for column in inspector.get_columns("tool_embeddings")
+    enrichment_columns = {
+        column["name"] for column in inspector.get_columns("tool_enrichments")
     }
     assert {
         "tool_id",
-        "embedding_type",
-        "embedding_model",
-        "text",
-        "vector",
-    } <= embedding_columns
+        "run_id",
+        "status",
+        "enriched_description",
+        "extraction_model",
+        "generation_model",
+        "validation_model",
+        "validation",
+    } <= enrichment_columns
+    assert "enrichment_id" in {
+        column["name"] for column in inspector.get_columns("tool_embeddings")
+    }
 
-    record_id = uuid.uuid4()
+    tool_id, run_id = uuid.uuid4(), uuid.uuid4()
     try:
         with Session(engine) as session:
-            record = ToolMetadata(
-                id=record_id,
-                metadata_format="test",
-                raw_metadata={},
-                title="Persistence test tool",
-                input_description="Test input description",
-                output_description="Test output description",
-                semantic_metadata={"supported_tasks": ["test"]},
-                enriched_description="Temporary test enrichment",
-                enrichment_status="validated",
-                enrichment_input_hash="0" * 64,
-                enrichment_version="test_v1",
-                enrichment_validation={"accuracy_score": 5},
+            session.add(
+                ToolMetadata(
+                    id=tool_id,
+                    metadata_format="test",
+                    raw_metadata={},
+                    title="Persistence test",
+                )
             )
-            session.add(record)
+            session.add(
+                ToolEnrichmentRun(
+                    id=run_id,
+                    name="persistence-test",
+                    status="completed",
+                    requested_extraction_model="test-requested",
+                    requested_generation_model="test-requested",
+                    requested_validation_model="test-requested",
+                    extraction_prompt_version="extraction_v1",
+                    generation_prompt_version="generation_v1",
+                    validation_prompt_version="validation_v1",
+                    sample_size=1,
+                )
+            )
+            session.flush()
+            session.add(
+                ToolEnrichment(
+                    tool_id=tool_id,
+                    run_id=run_id,
+                    status="validated",
+                    enriched_description="Temporary test enrichment",
+                    extraction_model="test-actual-extraction",
+                    generation_model="test-actual-generation",
+                    validation_model="test-actual-validation",
+                    validation={"accuracy_score": 5},
+                )
+            )
             session.commit()
         with Session(engine) as session:
-            saved = session.get(ToolMetadata, record_id)
-            assert saved is not None
+            saved = session.query(ToolEnrichment).filter_by(tool_id=tool_id).one()
             assert saved.enriched_description == "Temporary test enrichment"
-            assert saved.semantic_metadata == {"supported_tasks": ["test"]}
-            session.delete(saved)
+            assert saved.extraction_model == "test-actual-extraction"
+            session.delete(session.get(ToolMetadata, tool_id))
+            session.delete(session.get(ToolEnrichmentRun, run_id))
             session.commit()
     finally:
         with Session(engine) as session:
-            saved = session.get(ToolMetadata, record_id)
-            if saved is not None:
-                session.delete(saved)
-                session.commit()
+            session.query(ToolMetadata).filter_by(id=tool_id).delete()
+            session.query(ToolEnrichmentRun).filter_by(id=run_id).delete()
+            session.commit()
         engine.dispose()

@@ -2,14 +2,14 @@ import hashlib
 import uuid
 
 from airflow.sdk import dag, task
-from sqlalchemy import and_, or_, select, func
+from sqlalchemy import and_, or_, select, func, text
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert
 from toolmeta_harvester.config import egi_llm_api_key, embedding_api
 from toolmeta_harvester.db.engine import engine
 
 from toolmeta_harvester.db import database
-from toolmeta_harvester.db.models import Base, ToolMetadata, ToolEmbedding
+from toolmeta_harvester.db.models import ToolMetadata, ToolEmbedding
 from toolmeta_harvester.tasks import embedding
 
 
@@ -140,7 +140,12 @@ def embed_descriptions():
             stmt = insert(ToolEmbedding).values(values)
 
             stmt = stmt.on_conflict_do_update(
-                constraint="uq_tool_embedding",
+                index_elements=[
+                    ToolEmbedding.tool_id,
+                    ToolEmbedding.embedding_type,
+                    ToolEmbedding.embedding_model,
+                ],
+                index_where=text("enrichment_id IS NULL"),
                 set_={
                     "text": stmt.excluded.text,
                     "vector": stmt.excluded.vector,

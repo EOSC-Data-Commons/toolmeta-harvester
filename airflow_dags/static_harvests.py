@@ -2,10 +2,12 @@ from airflow.sdk import dag, task
 
 from toolmeta_harvester.flows.registry import get_static_flows
 
+DAG_PREFIX = "toolmeta"
+
 
 def create_static_dag(flow):
     @dag(
-        dag_id=f"tool_harvest_{flow.name}",
+        dag_id=f"{DAG_PREFIX}_harvest_{flow.name}",
         schedule=flow.default_schedule,
         catchup=False,
         max_active_runs=1,
@@ -30,7 +32,7 @@ def create_static_dag(flow):
 
 def create_test_static_dag(flow):
     @dag(
-        dag_id=f"tool_harvest_{flow.name}_test",
+        dag_id=f"{DAG_PREFIX}_harvest_{flow.name}_test",
         schedule=flow.default_schedule,
         catchup=False,
         max_active_runs=1,
@@ -55,7 +57,7 @@ def create_test_static_dag(flow):
 
 def create_generic_dag(flow):
     @dag(
-        dag_id=f"tool_generic_{flow.name}",
+        dag_id=f"{DAG_PREFIX}_generic_{flow.name}",
         schedule=flow.default_schedule,
         catchup=False,
         max_active_runs=1,

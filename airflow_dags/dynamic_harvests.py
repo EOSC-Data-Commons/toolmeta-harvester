@@ -7,6 +7,8 @@ from airflow.sdk import dag, task
 from sqlalchemy import create_engine, text, URL
 from toolmeta_harvester.flows.registry import get_dynamic_flows
 
+DAG_PREFIX = "toolmeta"
+
 
 DATABASE_URL = URL.create(
     drivername="postgresql+psycopg",
@@ -80,7 +82,7 @@ def make_dag_id(url: str) -> str:
     record_id = parsed.path.rstrip("/").split("/")[-1]
     record_id = re.sub(r"[^A-Za-z0-9_-]", "_", record_id)
 
-    return f"harvest_{hostname}_{record_id}"
+    return f"{DAG_PREFIX}_harvest_{hostname}_{record_id}"
 
 
 def weekend_schedule(dag_id: str) -> str:
@@ -113,7 +115,7 @@ def create_dynamic_dag(
     schedule = schedule or weekend_schedule(dag_id)
 
     @dag(
-        dag_id=f"tool_{dag_id}",
+        dag_id=dag_id,
         schedule=schedule,
         catchup=False,
         max_active_runs=1,
@@ -140,39 +142,6 @@ def create_dynamic_dag(
 
     return harvest_dag()
 
-
-# def create_harvest_dag(
-#     dag_id: str,
-#     url: str,
-#     schedule: str | None,
-#     enabled: bool = True,
-# ):
-#     @dag(
-#         dag_id=dag_id,
-#         schedule=schedule,
-#         catchup=False,
-#         max_active_runs=1,
-#         is_paused_upon_creation=not enabled,
-#         tags=["tool-harvester"],
-#     )
-#     def harvest_dag():
-#
-#         @task
-#         def harvest():
-#             from toolmeta_harvester.api import harvest_url
-#
-#             result = harvest_url(url)
-#
-#             return {
-#                 "pipeline_tag": result.pipeline_tag,
-#                 "record_ids": result.record_ids,
-#                 "harvested_count": result.harvested_count,
-#                 "failed_count": result.failed_count,
-#             }
-#
-#         harvest()
-#
-#     return harvest_dag()
 
 for source in load_sources():
     flow = find_flow_for_url(source["url"])

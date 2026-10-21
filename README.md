@@ -44,7 +44,6 @@ Airflow orchestrates the pipelines and provides scheduling, task execution, logg
 | `airflow_dags/` | DAG entry points for Airflow to discover and schedule. |
 | `config/` | Application configuration and local secrets configuration. |
 | `docker/postgres/init/` | Initialisation scripts for the local PostgreSQL environment. |
-| `docker-compose.dev.yaml` | Local development services. |
 | `pyproject.toml`, `uv.lock` | Python package metadata and dependency lockfile. |
 | `Makefile` | Development helper commands. |
 

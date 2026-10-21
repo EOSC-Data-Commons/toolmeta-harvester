@@ -2,7 +2,7 @@ from airflow.sdk import dag, task
 
 
 @dag(
-    dag_id="toolmeta_smoke_test",
+    dag_id="toolmeta_test_initialization",
     schedule=None,
     catchup=False,
     tags=["test"],

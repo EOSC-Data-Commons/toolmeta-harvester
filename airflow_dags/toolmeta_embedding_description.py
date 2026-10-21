@@ -36,9 +36,9 @@ def text_hash(text: str) -> str:
 def embed_descriptions():
 
     @task
-    def initialise_db():
+    def initialize_db():
         # Base.metadata.create_all(engine)
-        database.initialise_db()
+        database.initialize_db()
 
     @task
     def create_batches() -> list[list[str]]:
@@ -153,7 +153,7 @@ def embed_descriptions():
 
             return len(values)
 
-    init = initialise_db()
+    init = initialize_db()
     batches = create_batches()
 
     init >> batches

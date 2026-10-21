@@ -128,8 +128,8 @@ Useful Makefile targets include:
 ```bash
 make postgres-up       # Start local PostgreSQL
 make postgres-down     # Stop local PostgreSQL
-make postgres-logs     # Follow database logs
 make postgres-shell    # Open a psql shell
+make postgres-reset    # Remove the docker volume
 ```
 
 The local database uses a PostgreSQL image with the `pgvector` extension available for embedding storage and similarity search. 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import json
 from datetime import datetime
 
 from sqlalchemy import func
@@ -39,11 +40,12 @@ from toolmeta_harvester.tasks.github import (
     get_readme,
     get_repository,
     parse_github_url,
+    filter_repository_metadata,
     GitHubLocation,
 )
 from toolmeta_harvester.flows.decorators import dynamic_harvest
 
-PIPELINE_VERSION = "0.1.1"
+PIPELINE_VERSION = "0.2.0"
 
 PIPELINE_TAG = (
     f"{__name__.rsplit('.', 1)[-1].removeprefix('harvest_')}@{PIPELINE_VERSION}"
@@ -159,13 +161,13 @@ def _build_fallback_metadata(
     branch = location.ref or repository.get("default_branch")
     languages = get_languages(owner, repo, token=token)
     readme = get_readme(owner, repo, ref=branch, token=token)
+    raw_files: dict[str, str] = {}
 
     generated = convert_github_to_jsonld(
         repository,
         languages=languages,
         readme=readme,
     )
-    raw_files: dict[str, str] = {}
 
     package_text = get_file_text(
         owner,
@@ -222,14 +224,40 @@ def _build_fallback_metadata(
             logger.exception("Unable to convert CITATION.cff")
 
     raw_source = {
-        "repository": repository,
+        "repository": filter_repository_metadata(repository),
         "languages": languages,
         "readme": readme,
         "files": raw_files,
-        "generated_jsonld": generated,
+        # "generated_jsonld": generated,
     }
 
     return generated, raw_source, repository.get("url")
+
+
+def _collect_structured_metadata(
+    *,
+    location: GitHubLocation,
+    branch: str | None,
+    token: str | None,
+) -> dict[str, dict]:
+    sources = {}
+
+    for filename in (
+        "ro-crate-metadata.json",
+        "codemeta.json",
+    ):
+        data = get_json_file(
+            location.owner,
+            location.repo,
+            project_path(location, filename),
+            ref=branch,
+            token=token,
+        )
+
+        if data is not None:
+            sources[filename] = data
+
+    return sources
 
 
 def project_path(location: GitHubLocation, filename: str) -> str:
@@ -274,66 +302,49 @@ def pipeline_harvest_github(
     ) as session:
         try:
             record_id = repository.get("full_name")
-            codemeta = get_json_file(
-                location.owner,
-                location.repo,
-                # "codemeta.json",
-                project_path(location, "codemeta.json"),
-                ref=branch,
+
+            generated, source_metadata, _ = _build_fallback_metadata(
+                owner=location.owner,
+                repo=location.repo,
+                repository=repository,
+                location=location,
                 token=token,
             )
+            generated = extract_tool_metadata(generated)
 
-            if codemeta is not None:
-                logger.info(
-                    "Using codemeta.json for %s/%s", location.owner, location.repo
-                )
-                metadata = extract_tool_metadata(codemeta)
-                source_metadata = codemeta
-                metadata_url = get_file_api_url(
-                    location.owner,
-                    location.repo,
-                    # "codemeta.json",
-                    project_path(location, "codemeta.json"),
-                )
-                metadata_format = "codemeta"
-            else:
-                rocrate = get_json_file(
-                    location.owner,
-                    location.repo,
-                    project_path(location, "ro-crate-metadata.json"),
-                    ref=branch,
-                    token=token,
+            structured = _collect_structured_metadata(
+                location=location,
+                branch=branch,
+                token=token,
+            )
+            source_metadata.setdefault("files", {}).update(
+                {
+                    filename: json.dumps(data, ensure_ascii=False)
+                    for filename, data in structured.items()
+                }
+            )
+
+            if rocrate := structured.get("ro-crate-metadata.json"):
+                generated = merge_jsonld(
+                    generated,
+                    extract_tool_metadata(rocrate),
                 )
 
-                if rocrate is not None:
-                    logger.info(
-                        "Using ro-crate-metadata.json for %s/%s",
-                        location.owner,
-                        location.repo,
-                    )
-                    metadata = extract_tool_metadata(rocrate)
-                    source_metadata = rocrate
-                    metadata_url = get_file_api_url(
-                        location.owner,
-                        location.repo,
-                        project_path(location, "ro-crate-metadata.json"),
-                    )
-                    metadata_format = "ro-crate"
-                else:
-                    logger.info(
-                        "No codemeta.json or ro-crate-metadata.json for %s/%s; using fallback metadata",
-                        location.owner,
-                        location.repo,
-                    )
-                    generated, source_metadata, metadata_url = _build_fallback_metadata(
-                        owner=location.owner,
-                        repo=location.repo,
-                        repository=repository,
-                        location=location,
-                        token=token,
-                    )
-                    metadata = extract_tool_metadata(generated)
-                    metadata_format = "github-derived"
+            if codemeta := structured.get("codemeta.json"):
+                generated = merge_jsonld(
+                    generated,
+                    extract_tool_metadata(codemeta),
+                )
+
+            # source_metadata["structured_files"] = structured
+            # source_metadata["generated_jsonld"] = generated
+
+            # 5. Extract metadata from the combined document.
+            metadata = generated
+            metadata_format = "github-merged"
+            metadata_url = repository.get("url")
+
+            logger.debug(f"raw metadata: {source_metadata}")
 
             record = create_tool_metadata(
                 repository=repository,

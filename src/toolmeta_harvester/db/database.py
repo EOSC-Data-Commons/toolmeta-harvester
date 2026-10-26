@@ -3,6 +3,8 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.schema import CreateColumn
 
 from sqlalchemy import inspect, text
+from contextlib import contextmanager
+
 from toolmeta_harvester.db.engine import Base, engine
 from toolmeta_harvester.db.models import ToolMetadata, ToolEmbedding
 from toolmeta_harvester.db.triggers import (
@@ -99,17 +101,39 @@ def ensure_columns(engine: Engine) -> None:
                 conn.execute(text(sql))
 
 
+@contextmanager
+def database_init_lock(engine):
+    lock_id = 7355608
+
+    with engine.connect() as conn:
+        conn.execute(
+            text("SELECT pg_advisory_lock(:lock_id)"),
+            {"lock_id": lock_id},
+        )
+        conn.commit()
+
+        try:
+            yield
+        finally:
+            conn.execute(
+                text("SELECT pg_advisory_unlock(:lock_id)"),
+                {"lock_id": lock_id},
+            )
+            conn.commit()
+
+
 def initialize_db(populate_search_types=False) -> None:
     """Initialise tables, triggers, derived fields and indexes."""
 
-    Base.metadata.create_all(bind=engine)
+    with database_init_lock(engine):
+        Base.metadata.create_all(bind=engine)
 
-    ensure_columns(engine)
+        ensure_columns(engine)
 
-    ensure_tool_search_types_trigger(engine)
+        ensure_tool_search_types_trigger(engine)
 
-    if populate_search_types:
-        updated = populate_tool_search_types(engine)
-        logger.info("Populated search_types for %d tools", updated)
+        if populate_search_types:
+            updated = populate_tool_search_types(engine)
+            logger.info("Populated search_types for %d tools", updated)
 
-    ensure_indexes(engine)
+        ensure_indexes(engine)

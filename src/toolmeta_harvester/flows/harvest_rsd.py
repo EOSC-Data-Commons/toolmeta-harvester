@@ -177,9 +177,6 @@ def create_tool_metadata(
         # ---------------------------------------------------------
         # Dates
         # ---------------------------------------------------------
-        # date_created=parse_datetime(metadata.get("date_created")),
-        # date_published=parse_datetime(metadata.get("date_published")),
-        # date_modified=parse_datetime(metadata.get("date_modified")),
         date_created=parse_datetime(software.get("created_at")),
         date_published=parse_datetime(metadata.get("date_published")),
         date_modified=parse_datetime(software.get("updated_at")),

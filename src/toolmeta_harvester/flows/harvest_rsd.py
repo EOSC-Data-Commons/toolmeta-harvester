@@ -5,7 +5,7 @@ import logging
 from datetime import datetime
 
 import requests
-from sqlalchemy import func
+from sqlalchemy import select, func
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -25,7 +25,7 @@ RSD_BASE_URL = "https://research-software-directory.org"
 RSD_API_URL = f"{RSD_BASE_URL}/api/v1"
 RSD_CODEMETA_URL = f"{RSD_BASE_URL}/metadata/codemeta/v3"
 
-PIPELINE_VERSION = "0.1.0"
+PIPELINE_VERSION = "0.1.1"
 
 PIPELINE_TAG = (
     f"{__name__.rsplit('.', 1)[-1].removeprefix('harvest_')}@{PIPELINE_VERSION}"
@@ -126,7 +126,10 @@ def create_tool_metadata(
     metadata = extract_tool_metadata(codemeta)
     quality = assess_metadata_quality(metadata)
 
-    slug = software["slug"]
+    slug = software.get("slug")
+
+    if not slug:
+        raise ValueError(f"Missing slug in RSD software record: {software!r}")
 
     source_url = f"{RSD_BASE_URL}/software/{slug}"
     metadata_url = get_codemeta_url(slug)
@@ -174,9 +177,12 @@ def create_tool_metadata(
         # ---------------------------------------------------------
         # Dates
         # ---------------------------------------------------------
-        date_created=parse_datetime(metadata.get("date_created")),
+        # date_created=parse_datetime(metadata.get("date_created")),
+        # date_published=parse_datetime(metadata.get("date_published")),
+        # date_modified=parse_datetime(metadata.get("date_modified")),
+        date_created=parse_datetime(software.get("created_at")),
         date_published=parse_datetime(metadata.get("date_published")),
-        date_modified=parse_datetime(metadata.get("date_modified")),
+        date_modified=parse_datetime(software.get("updated_at")),
         # ---------------------------------------------------------
         # Original metadata
         # ---------------------------------------------------------
@@ -242,7 +248,7 @@ def harvest_rsd_software(
         codemeta=codemeta,
     )
 
-    logger.info(
+    logger.debug(
         "Record: %s",
         {
             column.name: getattr(record, column.name)
@@ -288,7 +294,7 @@ def iter_rsd_software(
         response = requests.get(
             f"{RSD_API_URL}/software",
             params={
-                "select": "id,slug,brand_name",
+                "select": "id,slug,brand_name,updated_at,created_at",
                 "order": "slug.asc",
                 "limit": request_limit,
                 "offset": offset,
@@ -331,20 +337,38 @@ def pipeline_harvest_rsd(
     # Base.metadata.create_all(engine)
     initialize_db()
 
-    # software_records = get_rsd_software(limit=limit)
-
     record_ids: list[str] = []
     failed_record_ids: list[str] = []
 
-    with Session(
-        engine,
-        expire_on_commit=False,
-    ) as session:
-        # for software in software_records:
+    with Session(engine, expire_on_commit=False) as session:
         for software in iter_rsd_software(limit=limit):
             slug = str(software.get("slug"))
+            source_id = str(software.get("id") or slug)
 
             try:
+                existing = session.scalar(
+                    select(ToolMetadata).where(
+                        ToolMetadata.source_identifier == source_id,
+                        ToolMetadata.pipeline_tag == PIPELINE_TAG,
+                    )
+                )
+
+                if existing:
+                    remote_modified = software.get("updated_at")
+
+                    if remote_modified:
+                        remote_modified = datetime.fromisoformat(
+                            remote_modified.replace("Z", "+00:00")
+                        )
+
+                    if (
+                        remote_modified is not None
+                        and existing.date_modified is not None
+                        and existing.date_modified >= remote_modified
+                    ):
+                        logger.info("Skipping unchanged RSD software %s", slug)
+                        continue
+
                 record_id = harvest_rsd_software(
                     session=session,
                     software=software,
@@ -355,7 +379,7 @@ def pipeline_harvest_rsd(
             except Exception:
                 session.rollback()
 
-                failed_record_ids.append(str(software.get("id") or slug))
+                failed_record_ids.append(source_id)
 
                 logger.exception(
                     "Failed to harvest RSD software %s",

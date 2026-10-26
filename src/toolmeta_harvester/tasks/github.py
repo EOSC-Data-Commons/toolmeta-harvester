@@ -19,6 +19,45 @@ RAW_HEADERS = {
     "Accept": "application/vnd.github.raw+json",
     "User-Agent": "toolmeta-harvester/1.0",
 }
+REPOSITORY_FIELDS = {
+    "id",
+    "name",
+    "full_name",
+    "description",
+    "html_url",
+    "clone_url",
+    "homepage",
+    "default_branch",
+    "created_at",
+    "updated_at",
+    "pushed_at",
+    "language",
+    "topics",
+    "license",
+    "fork",
+    "archived",
+    "disabled",
+    "private",
+    "visibility",
+    "size",
+    "stargazers_count",
+    "forks_count",
+    "open_issues_count",
+}
+
+OWNER_FIELDS = {
+    "login",
+    "id",
+    "type",
+    "html_url",
+}
+
+LICENSE_FIELDS = {
+    "key",
+    "name",
+    "spdx_id",
+    "url",
+}
 
 
 def _headers(*, raw: bool = False, token: str | None = None) -> dict[str, str]:
@@ -114,6 +153,42 @@ def get_repository(owner: str, repo: str, *, token: str | None = None) -> dict:
     )
     r.raise_for_status()
     return r.json()
+
+
+def filter_repository_metadata(repository: dict) -> dict:
+    """Keep only relevant GitHub repository metadata."""
+
+    filtered = {
+        key: value for key, value in repository.items() if key in REPOSITORY_FIELDS
+    }
+
+    if owner := repository.get("owner"):
+        filtered["owner"] = {
+            key: value for key, value in owner.items() if key in OWNER_FIELDS
+        }
+
+    if license_data := repository.get("license"):
+        filtered["license"] = {
+            key: value for key, value in license_data.items() if key in LICENSE_FIELDS
+        }
+
+    # Preserve limited fork provenance without duplicating
+    # the entire parent/source repository metadata.
+    if repository.get("fork"):
+        for field in ("parent", "source"):
+            if related := repository.get(field):
+                filtered[field] = {
+                    key: related.get(key)
+                    for key in (
+                        "id",
+                        "full_name",
+                        "html_url",
+                        "description",
+                    )
+                    if key in related
+                }
+
+    return filtered
 
 
 def get_languages(owner: str, repo: str, *, token: str | None = None) -> dict[str, int]:

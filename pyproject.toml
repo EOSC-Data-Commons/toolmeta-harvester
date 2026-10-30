@@ -1,6 +1,6 @@
 [project]
 name = "toolmeta_harvester"
-version = "1.1.0-alpha.2"
+version = "1.1.0-alpha.3"
 description = "Metadata harvesting and enrichment framework for the EOSC Data Commons Tool Registry, integrating software and workflow metadata from distributed sources through Apache Airflow pipelines."
 readme = "README.md"
 requires-python = ">=3.12"

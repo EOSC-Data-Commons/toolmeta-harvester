@@ -1,5 +1,5 @@
 from sqlalchemy import text, DDL, event
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Connection
 from toolmeta_harvester.db.models import ToolMetadata
 
 CREATE_SEARCH_TYPES_FUNCTION = DDL("""
@@ -69,25 +69,23 @@ event.listen(
 )
 
 
-def ensure_tool_search_types_trigger(engine: Engine) -> None:
+def ensure_tool_search_types_trigger(conn: Connection) -> None:
     """Create or replace the trigger maintaining search_types."""
 
-    with engine.begin() as conn:
-        conn.execute(CREATE_SEARCH_TYPES_FUNCTION)
-        conn.execute(CREATE_SEARCH_TYPES_TRIGGER)
+    conn.execute(CREATE_SEARCH_TYPES_FUNCTION)
+    conn.execute(CREATE_SEARCH_TYPES_TRIGGER)
 
 
-def populate_tool_search_types(engine: Engine) -> int:
+def populate_tool_search_types(conn: Connection) -> int:
     """Populate missing or empty search_types using the database trigger."""
 
-    with engine.begin() as conn:
-        result = conn.execute(
-            text("""
-                UPDATE tool_metadata
-                SET types = types
-                WHERE search_types IS NULL
-                   OR search_types = '{}';
-            """)
-        )
+    result = conn.execute(
+        text("""
+            UPDATE tool_metadata
+            SET types = types
+            WHERE search_types IS NULL
+                OR search_types = '{}';
+        """)
+    )
 
-        return result.rowcount
+    return result.rowcount

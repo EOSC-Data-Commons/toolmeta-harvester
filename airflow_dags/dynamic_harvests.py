@@ -1,159 +1,76 @@
 import os
-import hashlib
-import re
 from urllib.parse import urlparse
 
 from airflow.sdk import dag, task
-from sqlalchemy import create_engine, text, URL
+from sqlalchemy import create_engine, text, select
+from sqlalchemy.orm import Session
+
 from toolmeta_harvester.flows.registry import get_dynamic_flows
-
-DAG_PREFIX = "toolmeta"
-
-
-DATABASE_URL = URL.create(
-    drivername="postgresql+psycopg",
-    username=os.environ["TOOLMETA_HARVESTER_DATABASE__USER"],
-    password=os.environ["TOOLMETA_HARVESTER_DATABASE__PASSWORD"],
-    host=os.environ["TOOLMETA_HARVESTER_DATABASE__HOST"],
-    port=int(os.environ["TOOLMETA_HARVESTER_DATABASE__PORT"]),
-    database=os.environ["TOOLMETA_HARVESTER_DATABASE__NAME"],
-)
+from toolmeta_harvester.db import database
+from toolmeta_harvester.db.engine import engine
+from toolmeta_harvester.db.models import HarvestSource
 
 
 def find_flow_for_url(url: str):
     hostname = urlparse(url).hostname
 
     for flow in get_dynamic_flows():
-        print(
-            "FLOW:",
-            flow.name,
-            "hosts=",
-            flow.hosts,
-            "matcher=",
-            flow.matcher,
-        )
         if hostname in flow.hosts:
             return flow
 
-        if flow.matcher:
-            matched = flow.matcher(url)
-            print(
-                "MATCH:",
-                flow.name,
-                url,
-                matched,
-                flush=True,
-            )
-            if matched:
-                return flow
+        if flow.matcher and flow.matcher(url):
+            return flow
 
     raise ValueError(f"No dynamic harvester supports URL: {url}")
 
 
-def load_sources() -> list[dict]:
-    engine = create_engine(DATABASE_URL)
+@dag(
+    dag_id="toolmeta_dynamic_harvest",
+    schedule="0 20 * * 6",
+    catchup=False,
+    max_active_runs=1,
+    max_active_tasks=4,
+    tags=["tool-harvester", "dynamic"],
+)
+def dynamic_harvest_dag():
+    @task
+    def initialize_db():
+        database.initialize_db()
 
-    try:
-        with engine.connect() as conn:
-            result = conn.execute(
-                text("""
-                    SELECT
-                        id,
-                        url,
-                        schedule,
-                        enabled
-                    FROM harvest_source
-                    WHERE enabled = true
-                    ORDER BY id
-                """)
+    @task
+    def load_sources() -> list[str]:
+        with Session(engine) as session:
+            stmt = (
+                select(HarvestSource.url)
+                .where(HarvestSource.enabled.is_(True))
+                .order_by(HarvestSource.id)
             )
 
-            return [dict(row._mapping) for row in result]
-    finally:
-        engine.dispose()
+            return list(session.scalars(stmt))
 
-
-def make_dag_id(url: str) -> str:
-    parsed = urlparse(url)
-
-    hostname = parsed.hostname or "unknown"
-    hostname = re.sub(r"[^A-Za-z0-9_-]", "_", hostname)
-
-    record_id = parsed.path.rstrip("/").split("/")[-1]
-    record_id = re.sub(r"[^A-Za-z0-9_-]", "_", record_id)
-
-    return f"{DAG_PREFIX}_harvest_{hostname}_{record_id}"
-
-
-def weekend_schedule(dag_id: str) -> str:
-    # Saturday 20:00 -> Sunday 04:00 = 32 x 15-minute slots
-    slots = 32
-
-    digest = hashlib.sha256(dag_id.encode()).digest()
-    slot = int.from_bytes(digest[:4], "big") % slots
-
-    minutes_from_start = slot * 15
-    total_minutes = 20 * 60 + minutes_from_start
-
-    day_offset, minutes = divmod(total_minutes, 24 * 60)
-    hour, minute = divmod(minutes, 60)
-
-    # cron: Saturday = 6, Sunday = 0
-    day = 6 if day_offset == 0 else 0
-
-    return f"{minute} {hour} * * {day}"
-
-
-def create_dynamic_dag(
-    *,
-    dag_id: str,
-    url: str,
-    handler,
-    schedule: str | None,
-    enabled: bool,
-):
-    schedule = schedule or weekend_schedule(dag_id)
-
-    @dag(
-        dag_id=dag_id,
-        schedule=schedule,
-        catchup=False,
-        max_active_runs=1,
-        is_paused_upon_creation=not enabled,
-        tags=[
-            "tool-harvester",
-            "dynamic",
-        ],
+    @task(
+        max_active_tis_per_dag=4,
+        retries=2,
     )
-    def harvest_dag():
+    def harvest(url: str):
+        flow = find_flow_for_url(url)
 
-        @task
-        def harvest():
-            result = handler(url)
+        result = flow.handler(url)
 
-            return {
-                "pipeline_tag": result.pipeline_tag,
-                "record_ids": result.record_ids,
-                "harvested_count": result.harvested_count,
-                "failed_count": result.failed_count,
-            }
+        return {
+            "url": url,
+            "pipeline_tag": result.pipeline_tag,
+            "record_ids": result.record_ids,
+            "harvested_count": result.harvested_count,
+            "failed_count": result.failed_count,
+        }
 
-        harvest()
-
-    return harvest_dag()
-
-
-for source in load_sources():
-    flow = find_flow_for_url(source["url"])
-
-    dag_id = make_dag_id(source["url"])
-
-    schedule = source["schedule"] or flow.default_schedule
-
-    globals()[dag_id] = create_dynamic_dag(
-        dag_id=dag_id,
-        url=source["url"],
-        handler=flow.handler,
-        schedule=schedule,
-        enabled=source["enabled"],
+    init = initialize_db()
+    sources = load_sources()
+    harvest_tasks = harvest.expand(
+        url=sources,
     )
+    init >> sources >> harvest_tasks
+
+
+dynamic_harvest_dag()

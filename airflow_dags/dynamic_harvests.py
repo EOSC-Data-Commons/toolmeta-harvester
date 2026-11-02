@@ -67,11 +67,10 @@ def dynamic_harvest_dag():
 
     init = initialize_db()
     sources = load_sources()
-    init >> sources
-
-    harvest.expand(
+    harvest_tasks = harvest.expand(
         url=sources,
     )
+    init >> sources >> harvest_tasks
 
 
 dynamic_harvest_dag()

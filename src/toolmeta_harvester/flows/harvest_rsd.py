@@ -3,6 +3,9 @@ from __future__ import annotations
 import argparse
 import logging
 from datetime import datetime
+import ast
+import re
+from typing import Any
 
 import requests
 from sqlalchemy import select, func
@@ -25,7 +28,7 @@ RSD_BASE_URL = "https://research-software-directory.org"
 RSD_API_URL = f"{RSD_BASE_URL}/api/v1"
 RSD_CODEMETA_URL = f"{RSD_BASE_URL}/metadata/codemeta/v3"
 
-PIPELINE_VERSION = "0.1.1"
+PIPELINE_VERSION = "0.1.5"
 
 PIPELINE_TAG = (
     f"{__name__.rsplit('.', 1)[-1].removeprefix('harvest_')}@{PIPELINE_VERSION}"
@@ -112,6 +115,114 @@ def get_codemeta(slug: str) -> dict:
     return response.json()
 
 
+def _unpack_description(
+    value: Any,
+) -> tuple[str, list[dict], list[dict]]:
+    """
+    Clean an RSD software description and extract input/output entities.
+
+    Returns:
+        (description, inputs, outputs)
+    """
+
+    def unwrap(value: Any) -> str:
+        if value is None:
+            return ""
+
+        if isinstance(value, (list, tuple)):
+            parts = [unwrap(v) for v in value]
+            return max(parts, key=len, default="")
+
+        if not isinstance(value, str):
+            return str(value)
+
+        value = value.strip()
+
+        try:
+            parsed = ast.literal_eval(value)
+            if isinstance(parsed, (list, tuple)):
+                return unwrap(parsed)
+            if isinstance(parsed, str) and parsed != value:
+                return unwrap(parsed)
+        except (ValueError, SyntaxError, RecursionError):
+            pass
+
+        return value.replace("\\n", "\n").replace("\\t", "\t")
+
+    def parse_table(section: str) -> list[dict]:
+        entities = []
+
+        for line in section.splitlines():
+            if not line.strip().startswith("|"):
+                continue
+
+            cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+
+            if len(cells) < 3:
+                continue
+
+            name, data_type, description = cells[:3]
+
+            if not name or name.lower() == "name":
+                continue
+
+            id = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+
+            if re.fullmatch(r"[-:\s]+", name):
+                continue
+
+            entities.append(
+                {
+                    "id": id,
+                    "name": name,
+                    "description": description or None,
+                    "type": [data_type] if data_type else [],
+                    "additional_type": None,
+                    "encoding_format": None,
+                    "value_required": None,
+                    "default_value": None,
+                }
+            )
+
+        return entities
+
+    text = unwrap(value)
+
+    inputs = []
+    outputs = []
+
+    pattern = re.compile(
+        r"(?ims)^\s*##\s*(Inputs|Outputs)\s*\n"
+        r"(.*?)(?=^\s*##\s|\Z)"
+    )
+
+    for match in pattern.finditer(text):
+        section_type = match.group(1).lower()
+        entities = parse_table(match.group(2))
+
+        if section_type == "inputs":
+            inputs.extend(entities)
+        else:
+            outputs.extend(entities)
+
+    # Remove extracted input/output sections.
+    text = pattern.sub("", text)
+
+    # Remove boilerplate.
+    text = re.sub(
+        r"(?im)^\s*(Interface screenshot|"
+        r"See full list of documentation resources.*)\s*$",
+        "",
+        text,
+    )
+
+    # Normalise whitespace.
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n\s*\n+", "\n\n", text)
+
+    return text.strip(), inputs, outputs
+
+
 def create_tool_metadata(
     *,
     software: dict,
@@ -125,6 +236,12 @@ def create_tool_metadata(
 
     metadata = extract_tool_metadata(codemeta)
     quality = assess_metadata_quality(metadata)
+
+    (description, inputs, outputs) = _unpack_description(metadata.get("description"))
+
+    # logger.info(f"Description: {description}")
+    # logger.info(f"Inputs:  {inputs}")
+    # logger.info(f"Outputs: {outputs}")
 
     slug = software.get("slug")
 
@@ -149,7 +266,7 @@ def create_tool_metadata(
         # CodeMeta / schema.org core
         # ---------------------------------------------------------
         title=metadata.get("title"),
-        description=metadata.get("description"),
+        description=description,
         raw_description=metadata.get("raw_description"),
         version=_canonical_version(metadata),
         license=metadata.get("license"),
@@ -170,10 +287,10 @@ def create_tool_metadata(
         consumes_data=metadata.get("consumes_data", []),
         produces_data=metadata.get("produces_data", []),
         # ---------------------------------------------------------
-        # RO-Crate inputs / outputs
+        # Unpacked inputs / outputs
         # ---------------------------------------------------------
-        inputs=metadata.get("inputs", []),
-        outputs=metadata.get("outputs", []),
+        inputs=inputs,
+        outputs=outputs,
         # ---------------------------------------------------------
         # Dates
         # ---------------------------------------------------------

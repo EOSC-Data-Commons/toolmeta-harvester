@@ -28,7 +28,7 @@ RSD_BASE_URL = "https://research-software-directory.org"
 RSD_API_URL = f"{RSD_BASE_URL}/api/v1"
 RSD_CODEMETA_URL = f"{RSD_BASE_URL}/metadata/codemeta/v3"
 
-PIPELINE_VERSION = "0.1.4"
+PIPELINE_VERSION = "0.1.5"
 
 PIPELINE_TAG = (
     f"{__name__.rsplit('.', 1)[-1].removeprefix('harvest_')}@{PIPELINE_VERSION}"
@@ -266,7 +266,7 @@ def create_tool_metadata(
         # CodeMeta / schema.org core
         # ---------------------------------------------------------
         title=metadata.get("title"),
-        description=metadata.get("description"),
+        description=description,
         raw_description=metadata.get("raw_description"),
         version=_canonical_version(metadata),
         license=metadata.get("license"),

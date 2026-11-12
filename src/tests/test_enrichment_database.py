@@ -1,4 +1,4 @@
-"""Opt-in persistence smoke test for the experiment-aware enrichment schema."""
+"""PostgreSQL persistence checks for paired, result-linked enrichment records."""
 
 from __future__ import annotations
 
@@ -6,92 +6,144 @@ import os
 import uuid
 
 import pytest
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, select
 from sqlalchemy.orm import Session
 
-from toolmeta_harvester.db.models import ToolEnrichment, ToolEnrichmentRun, ToolMetadata
+from toolmeta_harvester.db.models import ToolEmbedding, ToolEnrichment, ToolMetadata
 
 DATABASE_URL = os.environ.get("TOOLMETA_TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(
     not DATABASE_URL,
-    reason="set TOOLMETA_TEST_DATABASE_URL to enable PostgreSQL persistence test",
+    reason="set TOOLMETA_TEST_DATABASE_URL to enable PostgreSQL persistence checks",
 )
 
 
-def test_enrichment_results_and_actual_models_persist_separately():
+def test_a_and_b_can_coexist_for_one_tool_and_embeddings_link_to_each_result():
     engine = create_engine(DATABASE_URL)
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
-    assert {"tool_enrichment_runs", "tool_enrichments", "tool_embeddings"} <= tables
-    assert "enrichment_status" not in {
+    assert {"tool_enrichments", "tool_embeddings"} <= tables
+    assert "tool_enrichment_runs" not in tables
+    metadata_columns = {
         column["name"] for column in inspector.get_columns("tool_metadata")
     }
+    assert "enriched_description" not in metadata_columns
+    assert "enrichment_status" not in metadata_columns
     enrichment_columns = {
         column["name"] for column in inspector.get_columns("tool_enrichments")
     }
     assert {
         "tool_id",
-        "run_id",
-        "status",
+        "experiment_id",
+        "variant",
+        "extraction_used",
+        "extraction_result",
         "enriched_description",
-        "extraction_model",
-        "generation_model",
-        "validation_model",
+        "model",
+        "prompt_version",
         "validation",
+        "input_hash",
+        "source_hash",
+        "extraction_request_count",
+        "generation_elapsed_seconds",
     } <= enrichment_columns
     assert "enrichment_id" in {
         column["name"] for column in inspector.get_columns("tool_embeddings")
     }
 
-    tool_id, run_id = uuid.uuid4(), uuid.uuid4()
+    tool_id = uuid.uuid4()
+    experiment_id = uuid.uuid4()
     try:
         with Session(engine) as session:
-            session.add(
-                ToolMetadata(
-                    id=tool_id,
-                    metadata_format="test",
-                    raw_metadata={},
-                    title="Persistence test",
-                )
+            tool = ToolMetadata(
+                id=tool_id,
+                metadata_format="persistence-test",
+                raw_metadata={},
+                title="Paired enrichment persistence test",
             )
-            session.add(
-                ToolEnrichmentRun(
-                    id=run_id,
-                    name="persistence-test",
-                    status="completed",
-                    requested_extraction_model="test-requested",
-                    requested_generation_model="test-requested",
-                    requested_validation_model="test-requested",
-                    extraction_prompt_version="extraction_v1",
-                    generation_prompt_version="generation_v1",
-                    validation_prompt_version="validation_v1",
-                    sample_size=1,
-                )
-            )
+            session.add(tool)
+            # Flush the source row first: this table has database triggers and
+            # keeping the fixture's insert order explicit avoids relying on
+            # mapper dependency ordering for an unrelated integration test.
             session.flush()
-            session.add(
-                ToolEnrichment(
-                    tool_id=tool_id,
-                    run_id=run_id,
-                    status="validated",
-                    enriched_description="Temporary test enrichment",
-                    extraction_model="test-actual-extraction",
-                    generation_model="test-actual-generation",
-                    validation_model="test-actual-validation",
-                    validation={"accuracy_score": 5},
-                )
+            baseline = ToolEnrichment(
+                tool_id=tool_id,
+                experiment_id=experiment_id,
+                variant="A",
+                extraction_used=False,
+                status="completed",
+                enriched_description="Baseline description",
+                requested_model="requested-model",
+                model="actual-model",
+                prompt_version="generation_v1",
+                input_hash="a" * 64,
+                validation_status="completed",
+                validation={"accuracy_score": 4},
+            )
+            extracted = ToolEnrichment(
+                tool_id=tool_id,
+                experiment_id=experiment_id,
+                variant="B",
+                extraction_used=True,
+                status="completed",
+                extraction_result={"supported_tasks": ["classification"]},
+                enriched_description="Extraction-assisted description",
+                requested_extraction_model="extractor",
+                extraction_model="actual-extractor",
+                requested_model="requested-model",
+                model="actual-model",
+                prompt_version="generation_v1",
+                input_hash="b" * 64,
+                validation_status="completed",
+                validation={"accuracy_score": 5},
+            )
+            session.add_all([baseline, extracted])
+            session.flush()
+            session.add_all(
+                [
+                    ToolEmbedding(
+                        tool_id=tool_id,
+                        enrichment_id=baseline.id,
+                        embedding_type="enriched_description",
+                        embedding_model="nomic-embed-text-v2-moe",
+                        actual_model="nomic-embed-text-v2-moe",
+                        text=baseline.enriched_description,
+                        vector=[0.1] * 768,
+                    ),
+                    ToolEmbedding(
+                        tool_id=tool_id,
+                        enrichment_id=extracted.id,
+                        embedding_type="enriched_description",
+                        embedding_model="nomic-embed-text-v2-moe",
+                        actual_model="nomic-embed-text-v2-moe",
+                        text=extracted.enriched_description,
+                        vector=[0.2] * 768,
+                    ),
+                ]
             )
             session.commit()
+
         with Session(engine) as session:
-            saved = session.query(ToolEnrichment).filter_by(tool_id=tool_id).one()
-            assert saved.enriched_description == "Temporary test enrichment"
-            assert saved.extraction_model == "test-actual-extraction"
-            session.delete(session.get(ToolMetadata, tool_id))
-            session.delete(session.get(ToolEnrichmentRun, run_id))
-            session.commit()
+            rows = session.scalars(
+                select(ToolEnrichment)
+                .where(
+                    ToolEnrichment.tool_id == tool_id,
+                    ToolEnrichment.experiment_id == experiment_id,
+                )
+                .order_by(ToolEnrichment.variant)
+            ).all()
+            assert [row.variant for row in rows] == ["A", "B"]
+            assert rows[0].extraction_used is False
+            assert rows[1].extraction_used is True
+            assert rows[1].extraction_model == "actual-extractor"
+            vectors = session.scalars(
+                select(ToolEmbedding).where(ToolEmbedding.tool_id == tool_id)
+            ).all()
+            assert {row.enrichment_id for row in vectors} == {row.id for row in rows}
     finally:
         with Session(engine) as session:
+            session.query(ToolEmbedding).filter_by(tool_id=tool_id).delete()
+            session.query(ToolEnrichment).filter_by(tool_id=tool_id).delete()
             session.query(ToolMetadata).filter_by(id=tool_id).delete()
-            session.query(ToolEnrichmentRun).filter_by(id=run_id).delete()
             session.commit()
         engine.dispose()

@@ -1,0 +1,1102 @@
+{
+  "experiment_id": "23c03cf7-0c4f-425a-b44d-fb16755605f5",
+  "sample_size": 100,
+  "sample_sha256": "f22fd8dfe61e4a01584a546ad443adaeec7cd1e57a682f6f7212ddb80383d98f",
+  "sample_source_counts": {
+    "biotoolsSchema": 70,
+    "boutiques": 1,
+    "codemeta": 13,
+    "json-ld": 1,
+    "ro-crate": 1,
+    "workflowhub-json": 14
+  },
+  "variants": {
+    "A": {
+      "rows": 100,
+      "successes": 100,
+      "failures": 0,
+      "validation_failures": 0,
+      "deterministic_pass_rate": 1.0,
+      "llm_evaluation": {
+        "accuracy_score": {
+          "count": 100,
+          "mean": 4.83,
+          "median": 5.0,
+          "p95": 5.0,
+          "min": 4.0,
+          "max": 5.0
+        },
+        "completeness_score": {
+          "count": 100,
+          "mean": 4.47,
+          "median": 4.0,
+          "p95": 5.0,
+          "min": 4.0,
+          "max": 5.0
+        },
+        "input_quality_score": {
+          "count": 100,
+          "mean": 2.96,
+          "median": 3.0,
+          "p95": 4.0,
+          "min": 0.0,
+          "max": 5.0
+        },
+        "output_quality_score": {
+          "count": 100,
+          "mean": 3.45,
+          "median": 4.0,
+          "p95": 5.0,
+          "min": 0.0,
+          "max": 5.0
+        },
+        "enriched_description_score": {
+          "count": 100,
+          "mean": 4.61,
+          "median": 5.0,
+          "p95": 5.0,
+          "min": 4.0,
+          "max": 5.0
+        },
+        "semantic_usefulness_score": {
+          "count": 100,
+          "mean": 4.36,
+          "median": 4.0,
+          "p95": 5.0,
+          "min": 3.0,
+          "max": 5.0
+        },
+        "hallucination_flags": 6,
+        "validated_records": 100,
+        "deterministic_passes": 100
+      },
+      "description_characters": {
+        "count": 100,
+        "mean": 439.82,
+        "median": 402.5,
+        "p95": 776.0,
+        "min": 176.0,
+        "max": 1111.0
+      },
+      "actual_generation_models": [
+        "qwen3.8-27b"
+      ],
+      "requested_generation_models": [
+        "qwen3.8-27b"
+      ],
+      "request_counts": {
+        "extraction": 0,
+        "generation": 300,
+        "validation": 100,
+        "llm_total": 400
+      },
+      "request_count_distribution": {
+        "extraction": {
+          "0": 100
+        },
+        "generation": {
+          "3": 100
+        },
+        "validation": {
+          "1": 100
+        }
+      },
+      "latency_seconds": {
+        "extraction": {
+          "count": 0,
+          "mean": null,
+          "median": null,
+          "p95": null,
+          "min": null,
+          "max": null
+        },
+        "generation": {
+          "count": 100,
+          "mean": 14.0279,
+          "median": 12.6921,
+          "p95": 28.7137,
+          "min": 5.2394,
+          "max": 37.4463
+        },
+        "validation": {
+          "count": 100,
+          "mean": 34.6834,
+          "median": 31.3586,
+          "p95": 61.4557,
+          "min": 13.4839,
+          "max": 102.7649
+        },
+        "total_per_tool": {
+          "count": 100,
+          "mean": 48.7113,
+          "median": 45.8874,
+          "p95": 83.7118,
+          "min": 19.6203,
+          "max": 131.0027
+        }
+      },
+      "embedding": {
+        "records": 100,
+        "request_count_share": 7.0,
+        "batch_count": 7,
+        "batch_elapsed_seconds": {
+          "count": 7,
+          "mean": 0.1288,
+          "median": 0.1196,
+          "p95": 0.217,
+          "min": 0.0661,
+          "max": 0.217
+        },
+        "batch_elapsed_total_seconds": 0.902,
+        "models": [
+          "nomic-embed-text-v2-moe"
+        ]
+      }
+    },
+    "B": {
+      "rows": 100,
+      "successes": 100,
+      "failures": 0,
+      "validation_failures": 0,
+      "deterministic_pass_rate": 1.0,
+      "llm_evaluation": {
+        "accuracy_score": {
+          "count": 100,
+          "mean": 4.75,
+          "median": 5.0,
+          "p95": 5.0,
+          "min": 4.0,
+          "max": 5.0
+        },
+        "completeness_score": {
+          "count": 100,
+          "mean": 4.33,
+          "median": 4.0,
+          "p95": 5.0,
+          "min": 3.0,
+          "max": 5.0
+        },
+        "input_quality_score": {
+          "count": 100,
+          "mean": 3.07,
+          "median": 4.0,
+          "p95": 5.0,
+          "min": 0.0,
+          "max": 5.0
+        },
+        "output_quality_score": {
+          "count": 100,
+          "mean": 3.25,
+          "median": 4.0,
+          "p95": 5.0,
+          "min": 0.0,
+          "max": 5.0
+        },
+        "enriched_description_score": {
+          "count": 100,
+          "mean": 4.55,
+          "median": 5.0,
+          "p95": 5.0,
+          "min": 4.0,
+          "max": 5.0
+        },
+        "semantic_usefulness_score": {
+          "count": 100,
+          "mean": 4.21,
+          "median": 4.0,
+          "p95": 5.0,
+          "min": 3.0,
+          "max": 5.0
+        },
+        "hallucination_flags": 9,
+        "validated_records": 100,
+        "deterministic_passes": 100
+      },
+      "description_characters": {
+        "count": 100,
+        "mean": 470.93,
+        "median": 440.0,
+        "p95": 818.0,
+        "min": 203.0,
+        "max": 1139.0
+      },
+      "actual_generation_models": [
+        "qwen3.8-27b"
+      ],
+      "requested_generation_models": [
+        "qwen3.8-27b"
+      ],
+      "request_counts": {
+        "extraction": 100,
+        "generation": 100,
+        "validation": 100,
+        "llm_total": 300
+      },
+      "request_count_distribution": {
+        "extraction": {
+          "1": 100
+        },
+        "generation": {
+          "1": 100
+        },
+        "validation": {
+          "1": 100
+        }
+      },
+      "latency_seconds": {
+        "extraction": {
+          "count": 100,
+          "mean": 39.0424,
+          "median": 34.3,
+          "p95": 93.5667,
+          "min": 7.4398,
+          "max": 147.9769
+        },
+        "generation": {
+          "count": 100,
+          "mean": 11.7586,
+          "median": 9.7975,
+          "p95": 26.737,
+          "min": 2.1954,
+          "max": 32.5298
+        },
+        "validation": {
+          "count": 100,
+          "mean": 35.8752,
+          "median": 34.6894,
+          "p95": 59.674,
+          "min": 10.9068,
+          "max": 84.5806
+        },
+        "total_per_tool": {
+          "count": 100,
+          "mean": 86.6762,
+          "median": 78.4685,
+          "p95": 155.4453,
+          "min": 33.6535,
+          "max": 238.939
+        }
+      },
+      "embedding": {
+        "records": 100,
+        "request_count_share": 7.0,
+        "batch_count": 7,
+        "batch_elapsed_seconds": {
+          "count": 7,
+          "mean": 0.1245,
+          "median": 0.1211,
+          "p95": 0.209,
+          "min": 0.0543,
+          "max": 0.209
+        },
+        "batch_elapsed_total_seconds": 0.871,
+        "models": [
+          "nomic-embed-text-v2-moe"
+        ]
+      }
+    }
+  },
+  "actual_models_by_stage": {
+    "extraction": [
+      "qwen3.8-27b"
+    ],
+    "generation": [
+      "qwen3.8-27b"
+    ],
+    "validation": [
+      "qwen3.8-27b"
+    ]
+  },
+  "requested_models_by_stage": {
+    "extraction": [
+      "qwen3.8-27b"
+    ],
+    "generation": [
+      "qwen3.8-27b"
+    ],
+    "validation": [
+      "qwen3.8-27b"
+    ]
+  },
+  "prompt_versions_by_stage": {
+    "extraction": [
+      "extraction_v1"
+    ],
+    "generation": [
+      "generation_v1"
+    ],
+    "validation": [
+      "validation_v1"
+    ]
+  },
+  "comparison": {
+    "embedding_cosine_similarity": {
+      "count": 100,
+      "mean": 0.9694,
+      "median": 0.9741,
+      "p95": 0.99,
+      "min": 0.9123,
+      "max": 0.9956
+    },
+    "paired_llm_score_differences": {
+      "accuracy_score": {
+        "A": {
+          "count": 100,
+          "mean": 4.83,
+          "median": 5.0,
+          "p95": 5.0,
+          "min": 4.0,
+          "max": 5.0
+        },
+        "B": {
+          "count": 100,
+          "mean": 4.75,
+          "median": 5.0,
+          "p95": 5.0,
+          "min": 4.0,
+          "max": 5.0
+        },
+        "paired_delta_B_minus_A": {
+          "count": 100,
+          "mean": -0.08,
+          "median": 0.0,
+          "p95": 1.0,
+          "min": -1.0,
+          "max": 1.0
+        }
+      },
+      "completeness_score": {
+        "A": {
+          "count": 100,
+          "mean": 4.47,
+          "median": 4.0,
+          "p95": 5.0,
+          "min": 4.0,
+          "max": 5.0
+        },
+        "B": {
+          "count": 100,
+          "mean": 4.33,
+          "median": 4.0,
+          "p95": 5.0,
+          "min": 3.0,
+          "max": 5.0
+        },
+        "paired_delta_B_minus_A": {
+          "count": 100,
+          "mean": -0.14,
+          "median": 0.0,
+          "p95": 1.0,
+          "min": -2.0,
+          "max": 1.0
+        }
+      },
+      "input_quality_score": {
+        "A": {
+          "count": 100,
+          "mean": 2.96,
+          "median": 3.0,
+          "p95": 4.0,
+          "min": 0.0,
+          "max": 5.0
+        },
+        "B": {
+          "count": 100,
+          "mean": 3.07,
+          "median": 4.0,
+          "p95": 5.0,
+          "min": 0.0,
+          "max": 5.0
+        },
+        "paired_delta_B_minus_A": {
+          "count": 100,
+          "mean": 0.11,
+          "median": 0.0,
+          "p95": 3.0,
+          "min": -4.0,
+          "max": 4.0
+        }
+      },
+      "output_quality_score": {
+        "A": {
+          "count": 100,
+          "mean": 3.45,
+          "median": 4.0,
+          "p95": 5.0,
+          "min": 0.0,
+          "max": 5.0
+        },
+        "B": {
+          "count": 100,
+          "mean": 3.25,
+          "median": 4.0,
+          "p95": 5.0,
+          "min": 0.0,
+          "max": 5.0
+        },
+        "paired_delta_B_minus_A": {
+          "count": 100,
+          "mean": -0.2,
+          "median": 0.0,
+          "p95": 3.0,
+          "min": -5.0,
+          "max": 5.0
+        }
+      },
+      "enriched_description_score": {
+        "A": {
+          "count": 100,
+          "mean": 4.61,
+          "median": 5.0,
+          "p95": 5.0,
+          "min": 4.0,
+          "max": 5.0
+        },
+        "B": {
+          "count": 100,
+          "mean": 4.55,
+          "median": 5.0,
+          "p95": 5.0,
+          "min": 4.0,
+          "max": 5.0
+        },
+        "paired_delta_B_minus_A": {
+          "count": 100,
+          "mean": -0.06,
+          "median": 0.0,
+          "p95": 1.0,
+          "min": -1.0,
+          "max": 1.0
+        }
+      },
+      "semantic_usefulness_score": {
+        "A": {
+          "count": 100,
+          "mean": 4.36,
+          "median": 4.0,
+          "p95": 5.0,
+          "min": 3.0,
+          "max": 5.0
+        },
+        "B": {
+          "count": 100,
+          "mean": 4.21,
+          "median": 4.0,
+          "p95": 5.0,
+          "min": 3.0,
+          "max": 5.0
+        },
+        "paired_delta_B_minus_A": {
+          "count": 100,
+          "mean": -0.15,
+          "median": 0.0,
+          "p95": 1.0,
+          "min": -1.0,
+          "max": 1.0
+        }
+      }
+    },
+    "llm_as_judge_description_score_direction": {
+      "A_better": 27,
+      "similar": 52,
+      "B_better": 21,
+      "both_poor": 0
+    },
+    "paired_tools": 100
+  },
+  "performance": {
+    "variants": {
+      "A": {
+        "llm_stage_elapsed_total_seconds": 4871.132,
+        "embedding_elapsed_total_seconds": 0.902,
+        "llm_requests": 400,
+        "embedding_requests": 7.0
+      },
+      "B": {
+        "llm_stage_elapsed_total_seconds": 8667.619,
+        "embedding_elapsed_total_seconds": 0.871,
+        "llm_requests": 300,
+        "embedding_requests": 7.0
+      }
+    },
+    "total_llm_requests": 700,
+    "total_embedding_requests": 14,
+    "total_embedding_elapsed_seconds": 1.773,
+    "additional_B_llm_elapsed_seconds_vs_A": 3796.488,
+    "additional_B_extraction_elapsed_seconds": 3904.24,
+    "additional_B_extraction_requests": 100,
+    "additional_B_llm_requests_vs_A": -100,
+    "generation_request_attempts_per_tool": {
+      "A": {
+        "3": 100
+      },
+      "B": {
+        "1": 100
+      }
+    },
+    "time_basis": "Accumulated per-stage API elapsed time; Airflow run wall-clock durations are listed separately."
+  },
+  "airflow_runs": {
+    "experiment_id": "23c03cf7-0c4f-425a-b44d-fb16755605f5",
+    "timezone": "UTC",
+    "runs": [
+      {
+        "dag_id": "tool_metadata_enrichment",
+        "variant": "A",
+        "run_id": "manual__2026-11-03T01:29:29.786656+00:00",
+        "state": "success",
+        "start_date": "2026-11-03T01:30:07.629471+00:00",
+        "end_date": "2026-11-03T01:56:17.342268+00:00",
+        "duration_seconds": 1569.712797,
+        "notes": "Task succeeded after infrastructure and authentication corrections; first attempt had missing worker DAG mount and placeholder API credential. Successful outputs were recorded on retry; persisted stage request counts are included in the database report."
+      },
+      {
+        "dag_id": "tool_metadata_enrichment",
+        "variant": "B",
+        "run_id": "manual__variant_B_23c03cf7",
+        "state": "success",
+        "start_date": "2026-11-03T01:56:17.387590+00:00",
+        "end_date": "2026-11-03T03:21:00.959432+00:00",
+        "duration_seconds": 5083.571842
+      },
+      {
+        "dag_id": "tool_metadata_embedding",
+        "variant": "A",
+        "run_id": "asset_triggered__2026-11-03T01:56:17.087415+00:00_4XzV6fJ4",
+        "state": "success",
+        "start_date": "2026-11-03T01:56:17.334154+00:00",
+        "end_date": "2026-11-03T01:56:21.883769+00:00",
+        "duration_seconds": 4.549615
+      },
+      {
+        "dag_id": "tool_metadata_embedding",
+        "variant": "B",
+        "run_id": "asset_triggered__2026-11-03T03:20:59.988684+00:00_Yv49hZYU",
+        "state": "success",
+        "start_date": "2026-11-03T03:21:00.950385+00:00",
+        "end_date": "2026-11-03T03:21:13.029681+00:00",
+        "duration_seconds": 12.079296
+      },
+      {
+        "dag_id": "tool_metadata_validation",
+        "variant": "A",
+        "run_id": "manual__validation_A_23c03cf7",
+        "state": "success",
+        "start_date": "2026-11-03T02:02:54.658818+00:00",
+        "end_date": "2026-11-03T03:00:44.794299+00:00",
+        "duration_seconds": 3470.135481
+      },
+      {
+        "dag_id": "tool_metadata_validation",
+        "variant": "B",
+        "run_id": "manual__validation_B_23c03cf7",
+        "state": "success",
+        "start_date": "2026-11-03T03:21:58.684588+00:00",
+        "end_date": "2026-11-03T04:21:47.636827+00:00",
+        "duration_seconds": 3588.952239
+      }
+    ],
+    "sample": {
+      "size": 100,
+      "sha256": "f22fd8dfe61e4a01584a546ad443adaeec7cd1e57a682f6f7212ddb80383d98f"
+    },
+    "limitations": [
+      "LLM judge scores are automated and require manual expert review.",
+      "Token and monetary usage were not available from the provider response."
+    ]
+  },
+  "raw_metadata_audit": {
+    "record_count": 37494,
+    "source_counts": {
+      "biotoolsSchema": 34445,
+      "boutiques": 37,
+      "codemeta": 1411,
+      "json-ld": 1,
+      "ro-crate": 16,
+      "workflowhub-json": 1584
+    },
+    "source_details": {
+      "biotoolsSchema": {
+        "records": 34445,
+        "with_description": 34445,
+        "with_keywords": 32961,
+        "with_inputs": 4113,
+        "with_outputs": 3409,
+        "with_software_types": 28604,
+        "with_consumes_data": 4113,
+        "with_produces_data": 3409
+      },
+      "boutiques": {
+        "records": 37,
+        "with_description": 37,
+        "with_keywords": 0,
+        "with_inputs": 37,
+        "with_outputs": 37,
+        "with_software_types": 0,
+        "with_consumes_data": 0,
+        "with_produces_data": 0
+      },
+      "codemeta": {
+        "records": 1411,
+        "with_description": 1408,
+        "with_keywords": 1296,
+        "with_inputs": 0,
+        "with_outputs": 0,
+        "with_software_types": 0,
+        "with_consumes_data": 0,
+        "with_produces_data": 0
+      },
+      "json-ld": {
+        "records": 1,
+        "with_description": 1,
+        "with_keywords": 0,
+        "with_inputs": 0,
+        "with_outputs": 0,
+        "with_software_types": 0,
+        "with_consumes_data": 0,
+        "with_produces_data": 0
+      },
+      "ro-crate": {
+        "records": 16,
+        "with_description": 16,
+        "with_keywords": 3,
+        "with_inputs": 14,
+        "with_outputs": 14,
+        "with_software_types": 0,
+        "with_consumes_data": 0,
+        "with_produces_data": 0
+      },
+      "workflowhub-json": {
+        "records": 1584,
+        "with_description": 1561,
+        "with_keywords": 1114,
+        "with_inputs": 763,
+        "with_outputs": 688,
+        "with_software_types": 1584,
+        "with_consumes_data": 0,
+        "with_produces_data": 0
+      }
+    },
+    "raw_metadata_bytes": {
+      "mean": 3315.8,
+      "median": 3066,
+      "p95": 5644,
+      "maximum": 83899
+    },
+    "common_top_level_raw_keys": [
+      {
+        "key": "name",
+        "count": 35894
+      },
+      {
+        "key": "description",
+        "count": 35894
+      },
+      {
+        "key": "license",
+        "count": 35857
+      },
+      {
+        "key": "version",
+        "count": 34446
+      },
+      {
+        "key": "operatingSystem",
+        "count": 34446
+      },
+      {
+        "key": "cost",
+        "count": 34445
+      },
+      {
+        "key": "link",
+        "count": 34445
+      },
+      {
+        "key": "owner",
+        "count": 34445
+      },
+      {
+        "key": "topic",
+        "count": 34445
+      },
+      {
+        "key": "credit",
+        "count": 34445
+      },
+      {
+        "key": "otherID",
+        "count": 34445
+      },
+      {
+        "key": "download",
+        "count": 34445
+      },
+      {
+        "key": "function",
+        "count": 34445
+      },
+      {
+        "key": "homepage",
+        "count": 34445
+      },
+      {
+        "key": "language",
+        "count": 34445
+      },
+      {
+        "key": "maturity",
+        "count": 34445
+      },
+      {
+        "key": "relation",
+        "count": 34445
+      },
+      {
+        "key": "toolType",
+        "count": 34445
+      },
+      {
+        "key": "validated",
+        "count": 34445
+      },
+      {
+        "key": "biotoolsID",
+        "count": 34445
+      },
+      {
+        "key": "elixirNode",
+        "count": 34445
+      },
+      {
+        "key": "lastUpdate",
+        "count": 34445
+      },
+      {
+        "key": "publication",
+        "count": 34445
+      },
+      {
+        "key": "additionDate",
+        "count": 34445
+      },
+      {
+        "key": "collectionID",
+        "count": 34445
+      },
+      {
+        "key": "elixir_badge",
+        "count": 34445
+      },
+      {
+        "key": "accessibility",
+        "count": 34445
+      },
+      {
+        "key": "biotoolsCURIE",
+        "count": 34445
+      },
+      {
+        "key": "documentation",
+        "count": 34445
+      },
+      {
+        "key": "editPermission",
+        "count": 34445
+      },
+      {
+        "key": "elixirPlatform",
+        "count": 34445
+      },
+      {
+        "key": "confidence_flag",
+        "count": 34445
+      },
+      {
+        "key": "elixirCommunity",
+        "count": 34445
+      },
+      {
+        "key": "homepage_status",
+        "count": 34445
+      },
+      {
+        "key": "data",
+        "count": 1584
+      },
+      {
+        "key": "jsonapi",
+        "count": 1584
+      },
+      {
+        "key": "author",
+        "count": 1449
+      },
+      {
+        "key": "@context",
+        "count": 1428
+      },
+      {
+        "key": "@type",
+        "count": 1411
+      },
+      {
+        "key": "keywords",
+        "count": 1411
+      }
+    ],
+    "common_nested_raw_keys": [
+      {
+        "key": "name",
+        "count": 297563
+      },
+      {
+        "key": "uri",
+        "count": 214174
+      },
+      {
+        "key": "term",
+        "count": 214174
+      },
+      {
+        "key": "note",
+        "count": 171459
+      },
+      {
+        "key": "type",
+        "count": 149307
+      },
+      {
+        "key": "url",
+        "count": 107493
+      },
+      {
+        "key": "version",
+        "count": 85167
+      },
+      {
+        "key": "description",
+        "count": 63532
+      },
+      {
+        "key": "email",
+        "count": 63122
+      },
+      {
+        "key": "rorid",
+        "count": 58748
+      },
+      {
+        "key": "gridid",
+        "count": 58748
+      },
+      {
+        "key": "orcidid",
+        "count": 58748
+      },
+      {
+        "key": "typeRole",
+        "count": 58748
+      },
+      {
+        "key": "fundrefid",
+        "count": 58748
+      },
+      {
+        "key": "typeEntity",
+        "count": 58748
+      },
+      {
+        "key": "id",
+        "count": 54659
+      },
+      {
+        "key": "authors",
+        "count": 54634
+      },
+      {
+        "key": "doi",
+        "count": 40126
+      },
+      {
+        "key": "license",
+        "count": 37457
+      },
+      {
+        "key": "biotoolsID",
+        "count": 36003
+      },
+      {
+        "key": "pmid",
+        "count": 35111
+      },
+      {
+        "key": "pmcid",
+        "count": 35111
+      },
+      {
+        "key": "metadata",
+        "count": 35111
+      },
+      {
+        "key": "link",
+        "count": 34447
+      },
+      {
+        "key": "operatingSystem",
+        "count": 34446
+      },
+      {
+        "key": "cost",
+        "count": 34445
+      },
+      {
+        "key": "owner",
+        "count": 34445
+      },
+      {
+        "key": "topic",
+        "count": 34445
+      },
+      {
+        "key": "credit",
+        "count": 34445
+      },
+      {
+        "key": "otherID",
+        "count": 34445
+      },
+      {
+        "key": "download",
+        "count": 34445
+      },
+      {
+        "key": "function",
+        "count": 34445
+      },
+      {
+        "key": "homepage",
+        "count": 34445
+      },
+      {
+        "key": "language",
+        "count": 34445
+      },
+      {
+        "key": "maturity",
+        "count": 34445
+      },
+      {
+        "key": "relation",
+        "count": 34445
+      },
+      {
+        "key": "toolType",
+        "count": 34445
+      },
+      {
+        "key": "validated",
+        "count": 34445
+      },
+      {
+        "key": "elixirNode",
+        "count": 34445
+      },
+      {
+        "key": "lastUpdate",
+        "count": 34445
+      },
+      {
+        "key": "publication",
+        "count": 34445
+      },
+      {
+        "key": "additionDate",
+        "count": 34445
+      },
+      {
+        "key": "collectionID",
+        "count": 34445
+      },
+      {
+        "key": "elixir_badge",
+        "count": 34445
+      },
+      {
+        "key": "accessibility",
+        "count": 34445
+      },
+      {
+        "key": "biotoolsCURIE",
+        "count": 34445
+      },
+      {
+        "key": "documentation",
+        "count": 34445
+      },
+      {
+        "key": "editPermission",
+        "count": 34445
+      },
+      {
+        "key": "elixirPlatform",
+        "count": 34445
+      },
+      {
+        "key": "confidence_flag",
+        "count": 34445
+      },
+      {
+        "key": "elixirCommunity",
+        "count": 34445
+      },
+      {
+        "key": "homepage_status",
+        "count": 34445
+      },
+      {
+        "key": "cmd",
+        "count": 33686
+      },
+      {
+        "key": "input",
+        "count": 33686
+      },
+      {
+        "key": "output",
+        "count": 33686
+      },
+      {
+        "key": "operation",
+        "count": 33686
+      },
+      {
+        "key": "data",
+        "count": 33162
+      },
+      {
+        "key": "default_value",
+        "count": 24418
+      },
+      {
+        "key": "title",
+        "count": 23357
+      },
+      {
+        "key": "date",
+        "count": 20189
+      }
+    ],
+    "observations": [
+      "bio.tools is the dominant source in this ToolDB snapshot.",
+      "Input and output coverage varies substantially by metadata source.",
+      "Raw metadata contains nested task, operation, topic, parameter, and format semantics that are not uniformly represented in normalized columns."
+    ]
+  },
+  "failures": [],
+  "human_review": {
+    "reviewed": 0,
+    "status": "pending"
+  },
+  "cost_note": "The API response does not expose token usage or price in this run; LLM request counts and elapsed time are reported as measurable cost/latency proxies."
+}

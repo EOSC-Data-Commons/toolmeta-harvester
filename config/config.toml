@@ -19,5 +19,13 @@ record_api = "https://zenodo.org/api/records"
 
 [egi]
 llm_api_key="your_key"
-embedding_api=""
+llm_api_url = "https://llm.ai.egi.eu/v1/chat/completions"
+llm_model = "qwen3.8-27b"
+extraction_model = "qwen3.8-27b"
+generation_model = "qwen3.8-27b"
+validation_model = "qwen3.8-27b"
+embedding_api = "https://llm.ai.egi.eu/v1/embeddings"
+embedding_model = "nomic-embed-text-v2-moe"
+llm_timeout = 180
+llm_max_retries = 3
 

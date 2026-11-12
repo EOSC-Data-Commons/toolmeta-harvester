@@ -11,9 +11,13 @@ Avoid marketing language, filler, repetition, and unsupported claims. Return onl
 {"enriched_description": "..."}."""
 
 
-def render_user_prompt(metadata: dict, extraction: dict) -> str:
+def render_user_prompt(metadata: dict, extraction: dict | None = None) -> str:
     return "Metadata and validated extracted profile:\n" + json.dumps(
-        {"metadata": metadata, "semantic_profile": extraction},
+        {
+            "metadata": metadata,
+            "semantic_profile": extraction,
+            "extraction_used": extraction is not None,
+        },
         ensure_ascii=False,
         sort_keys=True,
         indent=2,

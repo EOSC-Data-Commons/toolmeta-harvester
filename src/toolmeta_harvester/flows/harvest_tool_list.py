@@ -119,7 +119,7 @@ def pipeline_harvest_custom_tool_list(
                 metadata["title"] = metadata.get("title") or entry["name"]
                 metadata["url"] = metadata.get("url") or source_url
 
-                # logger.info(f"Generated metadata from custom tool list: {metadata}")
+                logger.info(f"Generated metadata for {metadata['title']} : {metadata}")
 
                 record = create_tool_metadata(
                     repository={

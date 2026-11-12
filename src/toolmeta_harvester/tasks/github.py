@@ -8,6 +8,9 @@ from dataclasses import dataclass
 
 import requests
 from typing import Any
+from toolmeta_harvester.config import load_git_config
+
+GIT_TOKEN = load_git_config().api_key
 
 GITHUB_API = "https://api.github.com"
 
@@ -62,9 +65,11 @@ LICENSE_FIELDS = {
 
 def _headers(*, raw: bool = False, token: str | None = None) -> dict[str, str]:
     headers = dict(RAW_HEADERS if raw else JSON_HEADERS)
-    token = token or os.getenv("GITHUB_TOKEN")
+    # token = token or os.getenv("GITHUB_TOKEN")
+    token = token or GIT_TOKEN
     if token:
         headers["Authorization"] = f"Bearer {token}"
+    print(f"TOKEN: ", token)
     return headers
 
 

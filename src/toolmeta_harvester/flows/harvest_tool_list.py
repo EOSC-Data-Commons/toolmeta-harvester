@@ -23,7 +23,7 @@ from toolmeta_harvester.tasks.github import (
 )
 
 
-PIPELINE_VERSION = "0.1.0"
+PIPELINE_VERSION = "0.1.1"
 PIPELINE_TAG = f"custom_tool_list@{PIPELINE_VERSION}"
 
 DEFAULT_URL = "https://github.com/EOSC-Data-Commons/custom-tool-list/tree/main/tools"
@@ -118,6 +118,8 @@ def pipeline_harvest_custom_tool_list(
 
                 metadata["title"] = metadata.get("title") or entry["name"]
                 metadata["url"] = metadata.get("url") or source_url
+
+                logger.debug(f"Generated metadata from custom tool list: {metadata}")
 
                 record = create_tool_metadata(
                     repository={

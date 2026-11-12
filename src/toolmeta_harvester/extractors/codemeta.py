@@ -4,7 +4,10 @@ import re
 from typing import Any
 
 from toolmeta_harvester.extractors.common import (
+    as_list,
     extract_entity_metadata,
+    extract_io_entities,
+    deduplicate_terms,
 )
 
 
@@ -58,6 +61,22 @@ def get_codemeta_version(
     return None
 
 
+def extract_codemeta_inputs(
+    metadata: dict[str, Any],
+) -> list[dict[str, Any]]:
+    inputs = []
+
+    # Parameters directly on the root entity.
+    inputs.extend(as_list(metadata.get("inputParameter")))
+
+    # Parameters on applications or services described by the source code.
+    for entity in as_list(metadata.get("isSourceCodeOf")):
+        if isinstance(entity, dict):
+            inputs.extend(as_list(entity.get("inputParameter")))
+
+    return extract_io_entities(inputs)
+
+
 def extract_codemeta_metadata(
     metadata: dict[str, Any],
 ) -> dict[str, Any]:
@@ -70,6 +89,9 @@ def extract_codemeta_metadata(
             "metadata_profile": [],
             "raw_metadata": metadata,
         }
+    )
+    result["inputs"] = deduplicate_terms(
+        result["inputs"] + extract_codemeta_inputs(metadata)
     )
 
     return result

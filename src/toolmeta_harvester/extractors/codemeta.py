@@ -8,6 +8,7 @@ from toolmeta_harvester.extractors.common import (
     extract_entity_metadata,
     extract_io_entities,
     deduplicate_terms,
+    deduplicate_values,
 )
 
 
@@ -77,6 +78,20 @@ def extract_codemeta_inputs(
     return extract_io_entities(inputs)
 
 
+def extract_codemeta_types(
+    metadata: dict[str, Any],
+) -> list[str]:
+    types = as_list(metadata.get("@type"))
+
+    types.extend(as_list(metadata.get("applicationCategory")))
+
+    for entity in as_list(metadata.get("isSourceCodeOf")):
+        if isinstance(entity, dict):
+            types.extend(as_list(entity.get("@type")))
+
+    return deduplicate_values([str(value) for value in types if value is not None])
+
+
 def extract_codemeta_metadata(
     metadata: dict[str, Any],
 ) -> dict[str, Any]:
@@ -88,6 +103,7 @@ def extract_codemeta_metadata(
             "metadata_version": (get_codemeta_version(metadata)),
             "metadata_profile": [],
             "raw_metadata": metadata,
+            "types": extract_codemeta_types(metadata),
         }
     )
     result["inputs"] = deduplicate_terms(

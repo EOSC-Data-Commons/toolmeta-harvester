@@ -7,7 +7,6 @@ from toolmeta_harvester.db.engine import Base, engine
 from toolmeta_harvester.db.models import (
     ToolEmbedding,
     ToolEnrichment,
-    ToolEnrichmentRun,
     ToolMetadata,
 )
 from toolmeta_harvester.db.triggers import (
@@ -20,7 +19,6 @@ logger = logging.getLogger(__name__)
 
 TABLES = [
     ToolMetadata.__table__,
-    ToolEnrichmentRun.__table__,
     ToolEnrichment.__table__,
     ToolEmbedding.__table__,
 ]

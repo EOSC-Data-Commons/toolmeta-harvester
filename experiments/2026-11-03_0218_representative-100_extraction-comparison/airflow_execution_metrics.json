@@ -1,0 +1,69 @@
+{
+  "experiment_id": "23c03cf7-0c4f-425a-b44d-fb16755605f5",
+  "timezone": "UTC",
+  "runs": [
+    {
+      "dag_id": "tool_metadata_enrichment",
+      "variant": "A",
+      "run_id": "manual__2026-11-03T01:29:29.786656+00:00",
+      "state": "success",
+      "start_date": "2026-11-03T01:30:07.629471+00:00",
+      "end_date": "2026-11-03T01:56:17.342268+00:00",
+      "duration_seconds": 1569.712797,
+      "notes": "Task succeeded after infrastructure and authentication corrections; first attempt had missing worker DAG mount and placeholder API credential. Successful outputs were recorded on retry; persisted stage request counts are included in the database report."
+    },
+    {
+      "dag_id": "tool_metadata_enrichment",
+      "variant": "B",
+      "run_id": "manual__variant_B_23c03cf7",
+      "state": "success",
+      "start_date": "2026-11-03T01:56:17.387590+00:00",
+      "end_date": "2026-11-03T03:21:00.959432+00:00",
+      "duration_seconds": 5083.571842
+    },
+    {
+      "dag_id": "tool_metadata_embedding",
+      "variant": "A",
+      "run_id": "asset_triggered__2026-11-03T01:56:17.087415+00:00_4XzV6fJ4",
+      "state": "success",
+      "start_date": "2026-11-03T01:56:17.334154+00:00",
+      "end_date": "2026-11-03T01:56:21.883769+00:00",
+      "duration_seconds": 4.549615
+    },
+    {
+      "dag_id": "tool_metadata_embedding",
+      "variant": "B",
+      "run_id": "asset_triggered__2026-11-03T03:20:59.988684+00:00_Yv49hZYU",
+      "state": "success",
+      "start_date": "2026-11-03T03:21:00.950385+00:00",
+      "end_date": "2026-11-03T03:21:13.029681+00:00",
+      "duration_seconds": 12.079296
+    },
+    {
+      "dag_id": "tool_metadata_validation",
+      "variant": "A",
+      "run_id": "manual__validation_A_23c03cf7",
+      "state": "success",
+      "start_date": "2026-11-03T02:02:54.658818+00:00",
+      "end_date": "2026-11-03T03:00:44.794299+00:00",
+      "duration_seconds": 3470.135481
+    },
+    {
+      "dag_id": "tool_metadata_validation",
+      "variant": "B",
+      "run_id": "manual__validation_B_23c03cf7",
+      "state": "success",
+      "start_date": "2026-11-03T03:21:58.684588+00:00",
+      "end_date": "2026-11-03T04:21:47.636827+00:00",
+      "duration_seconds": 3588.952239
+    }
+  ],
+  "sample": {
+    "size": 100,
+    "sha256": "f22fd8dfe61e4a01584a546ad443adaeec7cd1e57a682f6f7212ddb80383d98f"
+  },
+  "limitations": [
+    "LLM judge scores are automated and require manual expert review.",
+    "Token and monetary usage were not available from the provider response."
+  ]
+}

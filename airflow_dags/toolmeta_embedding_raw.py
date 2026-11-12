@@ -5,7 +5,7 @@ from airflow.sdk import dag, task
 from sqlalchemy import and_, or_, select, func, text
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert
-from toolmeta_harvester.config import egi_llm_api_key, embedding_api
+from toolmeta_harvester.config import egi_llm_api_key, embedding_api, embedding_model
 from toolmeta_harvester.db.engine import engine
 
 from toolmeta_harvester.db import database
@@ -13,9 +13,9 @@ from toolmeta_harvester.db.models import ToolMetadata, ToolEmbedding
 from toolmeta_harvester.tasks import embedding
 
 
-EMBEDDING_MODEL = "nomic-embed-text-v2-moe"
+EMBEDDING_MODEL = embedding_model()
 EMBEDDING_TYPE = "description"
-EMBEDDING_API = embedding_api() or "https://llm.ai.egi.eu/embeddings"
+EMBEDDING_API = embedding_api()
 
 AIRFLOW_BATCH_SIZE = 500
 MIN_DESCRIPTION_LENGTH = 50

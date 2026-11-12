@@ -2,7 +2,7 @@ from logging.config import fileConfig
 from toolmeta_harvester.db.models import Base
 from toolmeta_harvester.config import load_db_config
 
-from sqlalchemy import engine_from_config
+from sqlalchemy import URL, engine_from_config
 from sqlalchemy import pool
 
 from alembic import context
@@ -17,12 +17,16 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 db = load_db_config()
-postgres_url = f"postgresql+psycopg://{db.user}:{db.password}@{db.host}/{db.name}"
+postgres_url = URL.create(
+    drivername="postgresql+psycopg",
+    username=db.user,
+    password=db.password,
+    host=db.host,
+    port=db.port,
+    database=db.name,
+).render_as_string(hide_password=False)
 
-config.set_main_option(
-    "sqlalchemy.url",
-    postgres_url
-)
+config.set_main_option("sqlalchemy.url", postgres_url.replace("%", "%%"))
 
 # add your model's MetaData object here
 # for 'autogenerate' support
@@ -74,9 +78,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()

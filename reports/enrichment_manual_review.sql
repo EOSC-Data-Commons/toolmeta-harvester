@@ -1,73 +1,100 @@
--- Review the newest enrichment experiment across source metadata, LLM output,
--- per-stage model/prompt provenance, validation, and the linked embedding.
--- To inspect a particular experiment, replace latest_run with:
---   SELECT 'your-run-uuid'::uuid AS id
-WITH latest_run AS (
-    SELECT id
-    FROM public.tool_enrichment_runs
-    WHERE name NOT LIKE 'legacy-%'
-    ORDER BY started_at DESC
-    LIMIT 1
+-- Compare every sampled tool's source metadata and enriched attributes.
+-- Set the experiment UUID below to the run being reviewed; the same query
+-- presents both A (direct generation) and B (extraction + generation).
+WITH selected_experiment AS (
+    SELECT '23c03cf7-0c4f-425a-b44d-fb16755605f5'::uuid AS experiment_id
+),
+sample_results AS (
+    SELECT e.*, t.metadata_format, t.title, t.source_url, t.description,
+           t.raw_description, t.keywords, t.types, t.software_types,
+           t.consumes_data, t.produces_data, t.inputs, t.outputs,
+           t.raw_metadata
+    FROM tool_enrichments AS e
+    JOIN tool_metadata AS t ON t.id = e.tool_id
+    JOIN selected_experiment AS x ON x.experiment_id = e.experiment_id
 )
 SELECT
-    r.id AS enrichment_run_id,
-    r.name AS experiment_name,
-    r.status AS run_status,
-    r.started_at AS run_started_at,
-    r.finished_at AS run_finished_at,
-    r.requested_extraction_model,
-    e.extraction_model AS actual_extraction_model,
-    r.extraction_prompt_version,
-    r.requested_generation_model,
-    e.generation_model AS actual_generation_model,
-    r.generation_prompt_version,
-    r.requested_validation_model,
-    e.validation_model AS actual_validation_model,
-    r.validation_prompt_version,
-    t.id AS tool_id,
-    t.metadata_format AS source_format,
-    t.source_identifier,
-    t.source_url,
-    t.title,
-    t.description AS source_description,
-    t.raw_description AS source_raw_description,
-    t.keywords AS source_keywords,
-    t.types AS source_types,
-    t.inputs AS source_inputs,
-    t.outputs AS source_outputs,
-    t.consumes_data AS source_consumes_data,
-    t.produces_data AS source_produces_data,
-    t.raw_metadata AS source_raw_metadata,
-    e.status AS enrichment_status,
-    e.input_hash,
-    e.input_description,
-    e.output_description,
-    e.semantic_metadata AS all_extracted_enriched_attributes,
-    e.semantic_metadata -> 'supported_tasks' AS supported_tasks,
-    e.semantic_metadata -> 'methods_and_techniques' AS methods_and_techniques,
-    e.semantic_metadata -> 'scientific_domains' AS scientific_domains,
-    e.enriched_description,
-    e.validation -> 'accuracy_score' AS accuracy_score,
-    e.validation -> 'completeness_score' AS completeness_score,
-    e.validation -> 'input_quality_score' AS input_quality_score,
-    e.validation -> 'output_quality_score' AS output_quality_score,
-    e.validation -> 'enriched_description_score' AS enriched_description_score,
-    e.validation -> 'semantic_usefulness_score' AS semantic_usefulness_score,
-    e.validation -> 'hallucination_detected' AS hallucination_detected,
-    e.validation -> 'issues' AS validation_issues,
-    e.validation -> 'overall_assessment' AS overall_assessment,
-    e.error AS enrichment_error,
-    e.failed_stage,
-    em.embedding_model,
-    em.embedding_type,
-    em.text AS embedded_text,
-    vector_dims(em.vector) AS embedding_dimensions,
-    em.created_at AS embedding_created_at
-FROM latest_run lr
-JOIN public.tool_enrichment_runs r ON r.id = lr.id
-JOIN public.tool_enrichments e ON e.run_id = r.id
-JOIN public.tool_metadata t ON t.id = e.tool_id
-LEFT JOIN public.tool_embeddings em
-    ON em.enrichment_id = e.id
-   AND em.embedding_type = 'enriched_description'
-ORDER BY t.metadata_format, t.title, t.id;
+    a.experiment_id,
+    a.tool_id,
+    a.metadata_format AS source,
+    a.title,
+    a.source_url,
+    a.description AS source_description,
+    a.raw_description AS source_raw_description,
+    a.keywords AS source_keywords,
+    a.types AS source_types,
+    a.software_types AS source_software_types,
+    a.consumes_data AS source_consumes_data,
+    a.produces_data AS source_produces_data,
+    a.inputs AS source_inputs,
+    a.outputs AS source_outputs,
+    a.raw_metadata AS source_raw_metadata,
+
+    a.status AS status_a,
+    a.extraction_used AS extraction_used_a,
+    a.extraction_result AS extracted_attributes_a,
+    a.enriched_description AS enriched_description_a,
+    a.deterministic_validation AS deterministic_validation_a,
+    a.validation_status AS validation_status_a,
+    a.validation AS llm_validation_a,
+    a.requested_extraction_model AS requested_extraction_model_a,
+    a.extraction_model AS actual_extraction_model_a,
+    a.requested_model AS requested_generation_model_a,
+    a.model AS actual_generation_model_a,
+    a.requested_validation_model AS requested_validation_model_a,
+    a.validation_model AS actual_validation_model_a,
+    a.extraction_prompt_version AS extraction_prompt_version_a,
+    a.prompt_version AS generation_prompt_version_a,
+    a.validation_prompt_version AS validation_prompt_version_a,
+    a.extraction_request_count AS extraction_requests_a,
+    a.generation_request_count AS generation_requests_a,
+    a.validation_request_count AS validation_requests_a,
+    a.extraction_elapsed_seconds AS extraction_seconds_a,
+    a.generation_elapsed_seconds AS generation_seconds_a,
+    a.validation_elapsed_seconds AS validation_seconds_a,
+    ea.embedding_model AS requested_embedding_model_a,
+    ea.actual_model AS actual_embedding_model_a,
+    ea.embedding_type AS embedding_type_a,
+    ea.vector <=> eb.vector AS embedding_cosine_distance_a_to_b,
+
+    b.status AS status_b,
+    b.extraction_used AS extraction_used_b,
+    b.extraction_result AS extracted_attributes_b,
+    b.enriched_description AS enriched_description_b,
+    b.deterministic_validation AS deterministic_validation_b,
+    b.validation_status AS validation_status_b,
+    b.validation AS llm_validation_b,
+    b.requested_extraction_model AS requested_extraction_model_b,
+    b.extraction_model AS actual_extraction_model_b,
+    b.requested_model AS requested_generation_model_b,
+    b.model AS actual_generation_model_b,
+    b.requested_validation_model AS requested_validation_model_b,
+    b.validation_model AS actual_validation_model_b,
+    b.extraction_prompt_version AS extraction_prompt_version_b,
+    b.prompt_version AS generation_prompt_version_b,
+    b.validation_prompt_version AS validation_prompt_version_b,
+    b.extraction_request_count AS extraction_requests_b,
+    b.generation_request_count AS generation_requests_b,
+    b.validation_request_count AS validation_requests_b,
+    b.extraction_elapsed_seconds AS extraction_seconds_b,
+    b.generation_elapsed_seconds AS generation_seconds_b,
+    b.validation_elapsed_seconds AS validation_seconds_b,
+    eb.embedding_model AS requested_embedding_model_b,
+    eb.actual_model AS actual_embedding_model_b,
+    eb.embedding_type AS embedding_type_b,
+    a.source_hash,
+    a.extraction_input_hash AS extraction_request_hash_a,
+    b.extraction_input_hash AS extraction_request_hash_b,
+    a.input_hash AS generation_request_hash_a,
+    b.input_hash AS generation_request_hash_b,
+    a.error AS error_a,
+    b.error AS error_b
+FROM sample_results AS a
+LEFT JOIN sample_results AS b
+       ON b.experiment_id = a.experiment_id
+      AND b.tool_id = a.tool_id
+      AND b.variant = 'B'
+LEFT JOIN tool_embeddings AS ea ON ea.enrichment_id = a.id
+LEFT JOIN tool_embeddings AS eb ON eb.enrichment_id = b.id
+WHERE a.variant = 'A'
+ORDER BY a.metadata_format, a.title, a.tool_id;

@@ -13,12 +13,13 @@ semantic_usefulness_score (integer 0–5), and overall_assessment (string)."""
 
 
 def render_user_prompt(
-    metadata: dict, extraction: dict, enriched_description: str
+    metadata: dict, extraction: dict | None, enriched_description: str
 ) -> str:
     return "Review this candidate enrichment against its source:\n" + json.dumps(
         {
             "metadata": metadata,
             "semantic_profile": extraction,
+            "extraction_used": extraction is not None,
             "enriched_description": enriched_description,
         },
         ensure_ascii=False,

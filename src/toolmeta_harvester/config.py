@@ -1,6 +1,6 @@
-import os
 from dataclasses import dataclass
 from pathlib import Path
+import os
 
 from dynaconf import Dynaconf
 
@@ -10,7 +10,10 @@ os.environ.setdefault("BASE_DIR", str(Path(__file__).resolve().parents[2]))
 
 settings = Dynaconf(
     envvar_prefix="TOOLMETA_HARVESTER",
-    settings_files=["config/config.toml", "config/.secrets.toml"],
+    settings_files=[
+        str(Path(__file__).resolve().parents[2] / "config/config.toml"),
+        str(Path(__file__).resolve().parents[2] / "config/.secrets.toml"),
+    ],
 )
 
 
@@ -47,56 +50,46 @@ def load_git_config() -> GitConfig:
 
 
 def egi_llm_api_key() -> str:
-    return os.environ.get("LLM_EGI_API_KEY", settings.get("egi.llm_api_key", ""))
+    return str(settings.get("egi.llm_api_key", ""))
 
 
 def egi_llm_api_url() -> str:
-    return os.environ.get(
-        "LLM_EGI_API_URL",
-        settings.get("egi.llm_api_url", "https://llm.ai.egi.eu/v1/chat/completions"),
-    )
+    return str(settings.get("egi.llm_api_url"))
 
 
 def egi_llm_model() -> str:
-    return os.environ.get(
-        "LLM_EGI_MODEL",
-        settings.get("egi.llm_model", "qwen3.8-27b"),
-    )
+    return str(settings.get("egi.llm_model"))
 
 
 def egi_llm_stage_model(stage: str) -> str:
     """Resolve a fixed model for one stage, falling back to the run-wide model."""
     if stage not in {"extraction", "generation", "validation"}:
         raise ValueError(f"Unsupported LLM stage: {stage}")
-    env_key = f"LLM_EGI_{stage.upper()}_MODEL"
-    return os.environ.get(env_key, egi_llm_model())
+    return str(settings.get(f"egi.{stage}_model", egi_llm_model()))
 
 
 def embedding_api() -> str:
-    egi = settings.egi
-    return egi["embedding_api"]
+    return str(settings.get("egi.embedding_api"))
+
+
+def embedding_model() -> str:
+    return str(settings.get("egi.embedding_model"))
+
+
+def llm_timeout() -> int:
+    return int(settings.get("egi.llm_timeout", 180))
+
+
+def llm_retries() -> int:
+    return int(settings.get("egi.llm_max_retries", 3))
 
 
 def load_db_config() -> DatabaseConfig:
     db = settings.database
     return DatabaseConfig(
-        host=os.environ.get(
-            "TOOLMETA_HARVESTER_DATABASE__HOST",
-            os.environ.get("POSTGRES_ADDRESS_DOCKER") or db["host"],
-        ),
-        port=int(
-            os.environ.get(
-                "TOOLMETA_HARVESTER_DATABASE__PORT",
-                os.environ.get("POSTGRES_PORT_DOCKER") or db["port"],
-            )
-        ),
-        user=os.environ.get(
-            "TOOLMETA_HARVESTER_DATABASE__USER",
-            os.environ.get("POSTGRES_USER") or db["user"],
-        ),
-        password=os.environ.get(
-            "TOOLMETA_HARVESTER_DATABASE__PASSWORD",
-            os.environ.get("POSTGRES_PASSWORD") or db["password"],
-        ),
-        name=os.environ.get("TOOLMETA_HARVESTER_DATABASE__NAME", db["name"]),
+        host=str(db["host"]),
+        port=int(db["port"]),
+        user=str(db["user"]),
+        password=str(db["password"]),
+        name=str(db["name"]),
     )

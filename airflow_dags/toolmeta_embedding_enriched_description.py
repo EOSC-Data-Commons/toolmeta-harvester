@@ -1,67 +1,167 @@
-from datetime import timedelta
+import hashlib
+import uuid
 
-from airflow.sdk import Asset, dag, get_current_context, task
+from airflow.sdk import dag, task
+from sqlalchemy import and_, or_, select, func
+from sqlalchemy.orm import Session
+from sqlalchemy.dialects.postgresql import insert
+from toolmeta_harvester.config import egi_llm_api_key, embedding_api
+from toolmeta_harvester.db.engine import engine
 
-ENRICHED_DESCRIPTIONS = Asset("toolmeta://enriched-descriptions")
+from toolmeta_harvester.db import database
+from toolmeta_harvester.db.models import Base, ToolMetadataEnrichment, ToolEmbedding
+from toolmeta_harvester.tasks import embedding
+
+
+EMBEDDING_MODEL = "nomic-embed-text-v2-moe"
+EMBEDDING_TYPE = "description_enriched"
+EMBEDDING_API = embedding_api() or "https://llm.ai.egi.eu/embeddings"
+
+AIRFLOW_BATCH_SIZE = 500
+MIN_DESCRIPTION_LENGTH = 50
+EGI_LLM_API_KEY = egi_llm_api_key()
+
+
+def text_hash(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 @dag(
-    dag_id="tool_metadata_embedding",
-    schedule=ENRICHED_DESCRIPTIONS,
+    dag_id="toolmeta_embedding_description",
+    schedule="0 4 * * 1",
     catchup=False,
-    max_active_runs=1,
-    max_active_tasks=4,
-    tags=["toolmeta", "embedding"],
-    doc_md="""Create missing vectors for current successful generated descriptions.
-
-    This DAG consumes one Asset event after an enrichment run's mapped batches finish. It maps
-    pending results into batches of 10, with an embedding API batch size of 16. Validation is
-    not a prerequisite. Manually trigger with `{"limit": 1000}` for a bounded backfill, or
-    `{"full_catalog": true}` to process all currently eligible results.
-    """,
+    max_active_tasks=10,
+    tags=["embedding"],
 )
-def tool_metadata_embedding():
-    @task(retries=0)
-    def prepare_batches() -> list[list[str]]:
-        from toolmeta_harvester.enrichment import select_pending_embedding_batches
+def embed_descriptions():
 
-        context = get_current_context()
-        conf = context["dag_run"].conf or {}
-        unknown = set(conf) - {"limit", "full_catalog"}
-        if unknown:
-            raise ValueError(f"Unsupported embedding parameters: {sorted(unknown)}")
-        full_catalog = bool(conf.get("full_catalog", True))
-        if full_catalog and "limit" in conf:
-            raise ValueError("Do not provide limit when full_catalog is true")
-        return select_pending_embedding_batches(
-            limit=None if full_catalog else conf.get("limit"),
-            full_catalog=full_catalog,
-            batch_size=10,
-        )
+    @task
+    def initialize_db():
+        # Base.metadata.create_all(engine)
+        database.initialize_db()
 
-    @task(retries=1, execution_timeout=timedelta(hours=3))
-    def embed_batch(enrichment_ids: list[str]) -> dict:
-        from toolmeta_harvester.enrichment import embed_enrichment_batch
+    @task
+    def create_batches() -> list[list[str]]:
+        """
+        Find tools whose description embedding is missing or stale.
 
-        return embed_enrichment_batch(enrichment_ids=enrichment_ids)
+        An embedding is stale when:
+        - no embedding exists, or
+        - ToolMetadata.date_modified > ToolEmbedding.created_at
+        """
 
-    @task(retries=0)
-    def summarize_batches(batch_summaries: list[dict]) -> dict:
-        return {
-            "selected_records": sum(
-                item["selected_records"] for item in batch_summaries
-            ),
-            "embeddings_written": sum(
-                item["embeddings_written"] for item in batch_summaries
-            ),
-            "llm_requests": sum(item["llm_requests"] for item in batch_summaries),
-            "processing_seconds": round(
-                sum(item["processing_seconds"] for item in batch_summaries), 3
-            ),
-        }
+        with Session(engine) as session:
+            stmt = (
+                select(ToolMetadataEnrichment.id)
+                .outerjoin(
+                    ToolEmbedding,
+                    and_(
+                        ToolEmbedding.tool_id == ToolMetadataEnrichment.id,
+                        ToolEmbedding.embedding_type == EMBEDDING_TYPE,
+                        ToolEmbedding.embedding_model == EMBEDDING_MODEL,
+                    ),
+                )
+                .where(
+                    ToolMetadataEnrichment.enriched_description.is_not(None),
+                    func.length(ToolMetadataEnrichment.enriched_description)
+                    >= MIN_DESCRIPTION_LENGTH,
+                    or_(
+                        # Never embedded
+                        ToolEmbedding.id.is_(None),
+                        # Source metadata changed after embedding
+                        ToolMetadataEnrichment.created_at > ToolEmbedding.created_at,
+                    ),
+                )
+                .order_by(ToolMetadataEnrichment.id)
+            )
 
-    results = embed_batch.expand(enrichment_ids=prepare_batches())
-    summarize_batches(results)
+            tool_ids = session.scalars(stmt).all()
+
+        ids = [str(tool_id) for tool_id in tool_ids]
+
+        return [
+            ids[i : i + AIRFLOW_BATCH_SIZE]
+            for i in range(0, len(ids), AIRFLOW_BATCH_SIZE)
+        ]
+
+    @task
+    def embed_batch(tool_ids: list[str]) -> int:
+        ids = [uuid.UUID(tool_id) for tool_id in tool_ids]
+
+        with Session(engine) as session:
+            records = session.scalars(
+                select(ToolMetadataEnrichment)
+                .where(ToolMetadataEnrichment.id.in_(ids))
+                .order_by(ToolMetadataEnrichment.id)
+            ).all()
+
+            records = [record for record in records if record.description]
+
+            if not records:
+                return 0
+
+            # ---------------------------------------------------------
+            # Generate description embeddings
+            # ---------------------------------------------------------
+
+            vectors = embedding.embed(
+                [record.description for record in records],
+                api_key=EGI_LLM_API_KEY,
+                api_url=EMBEDDING_API,
+                model=EMBEDDING_MODEL,
+                prefix="search_document: ",
+            )
+
+            if len(vectors) != len(records):
+                raise RuntimeError(
+                    f"Embedding API returned {len(vectors)} vectors "
+                    f"for {len(records)} records"
+                )
+
+            # ---------------------------------------------------------
+            # Prepare rows
+            # ---------------------------------------------------------
+
+            values = [
+                {
+                    "tool_id": record.id,
+                    "embedding_type": EMBEDDING_TYPE,
+                    "embedding_model": EMBEDDING_MODEL,
+                    # Store the original text, not the prefixed/truncated text.
+                    "text": record.enriched_description,
+                    "vector": vector,
+                }
+                for record, vector in zip(records, vectors)
+            ]
+
+            # ---------------------------------------------------------
+            # Bulk UPSERT
+            # ---------------------------------------------------------
+
+            stmt = insert(ToolEmbedding).values(values)
+
+            stmt = stmt.on_conflict_do_update(
+                constraint="uq_tool_embedding",
+                set_={
+                    "text": stmt.excluded.text,
+                    "vector": stmt.excluded.vector,
+                    "created_at": func.now(),
+                },
+            )
+
+            session.execute(stmt)
+            session.commit()
+
+            return len(values)
+
+    init = initialize_db()
+    batches = create_batches()
+
+    init >> batches
+
+    embed_batch.expand(
+        tool_ids=batches,
+    )
 
 
-tool_metadata_embedding()
+embed_descriptions()

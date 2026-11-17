@@ -17,6 +17,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy import text as sql_text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
@@ -26,9 +27,7 @@ from toolmeta_harvester.db.engine import Base
 
 EMBEDDING_TYPES = [
     "description",
-    "enriched_description",
-    "authors",
-    "keywords",
+    "description_enriched",
 ]
 
 EMBEDDING_MODEL = "nomic-embed-text-v2-moe"
@@ -290,83 +289,54 @@ class ToolMetadata(Base):
     )
 
 
-class ToolEnrichment(Base):
-    """One generated description, optionally using an extraction result."""
+class ToolMetadataEnrichment(Base):
+    """Append-only history of successful metadata enrichments."""
 
-    __tablename__ = "tool_enrichments"
+    __tablename__ = "tool_metadata_enrichment"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
     )
+
     tool_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("tool_metadata.id", ondelete="CASCADE"),
         nullable=False,
     )
-    experiment_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
-    variant: Mapped[str] = mapped_column(String(1), nullable=False)
-    extraction_used: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default=sql_text("false")
+
+    enriched_description: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
     )
-    status: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="pending", server_default="pending"
+
+    model: Mapped[str] = mapped_column(
+        String(200),
+        nullable=False,
     )
-    extraction_result: Mapped[dict | None] = mapped_column(JSONB)
-    enriched_description: Mapped[str | None] = mapped_column(Text)
-    source_hash: Mapped[str | None] = mapped_column(String(64))
-    extraction_input_hash: Mapped[str | None] = mapped_column(String(64))
-    input_hash: Mapped[str | None] = mapped_column(String(64))
-    requested_extraction_model: Mapped[str | None] = mapped_column(String(200))
-    extraction_model: Mapped[str | None] = mapped_column(String(200))
-    requested_model: Mapped[str | None] = mapped_column(String(200))
-    model: Mapped[str | None] = mapped_column(String(200))
-    requested_validation_model: Mapped[str | None] = mapped_column(String(200))
-    validation_model: Mapped[str | None] = mapped_column(String(200))
-    extraction_prompt_version: Mapped[str | None] = mapped_column(String(100))
-    prompt_version: Mapped[str | None] = mapped_column(String(100))
-    validation_prompt_version: Mapped[str | None] = mapped_column(String(100))
-    deterministic_validation: Mapped[dict | None] = mapped_column(JSONB)
-    validation: Mapped[dict | None] = mapped_column(JSONB)
-    extraction_validation: Mapped[dict | None] = mapped_column(JSONB)
-    validation_status: Mapped[str] = mapped_column(
-        String(20), nullable=False, server_default="pending"
+
+    prompt_version: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
     )
-    extraction_request_count: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default="0"
-    )
-    generation_request_count: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default="0"
-    )
-    validation_request_count: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default="0"
-    )
-    extraction_elapsed_seconds: Mapped[float | None] = mapped_column(Float)
-    generation_elapsed_seconds: Mapped[float | None] = mapped_column(Float)
-    validation_elapsed_seconds: Mapped[float | None] = mapped_column(Float)
-    error: Mapped[str | None] = mapped_column(Text)
-    failed_stage: Mapped[str | None] = mapped_column(String(20))
+
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
-        onupdate=func.now(),
         nullable=False,
     )
 
     __table_args__ = (
-        UniqueConstraint(
-            "tool_id", "experiment_id", "variant", name="uq_tool_enrichment_variant"
-        ),
-        CheckConstraint("variant IN ('A', 'B')", name="ck_tool_enrichment_variant"),
         CheckConstraint(
-            "(variant = 'A' AND extraction_used = false) OR "
-            "(variant = 'B' AND extraction_used = true)",
-            name="ck_tool_enrichment_extraction_variant",
+            "length(trim(enriched_description)) > 0",
+            name="ck_tool_metadata_enrichment_description_nonempty",
         ),
-        Index("ix_tool_enrichments_experiment_variant", "experiment_id", "variant"),
-        Index("ix_tool_enrichments_status", "status"),
+        Index(
+            "ix_tool_metadata_enrichment_tool_created",
+            "tool_id",
+            "created_at",
+        ),
     )
 
 
@@ -388,13 +358,6 @@ class ToolEmbedding(Base):
         index=True,
     )
 
-    enrichment_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tool_enrichments.id", ondelete="CASCADE"),
-        nullable=True,
-        index=True,
-    )
-
     # description, keywords, authors, metadata, ...
     embedding_type: Mapped[str] = mapped_column(
         String(50),
@@ -405,18 +368,6 @@ class ToolEmbedding(Base):
         String(200),
         nullable=False,
     )
-
-    actual_model: Mapped[str | None] = mapped_column(String(200))
-
-    embedding_batch_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), index=True
-    )
-
-    request_count: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default="0"
-    )
-
-    elapsed_seconds: Mapped[float | None] = mapped_column(Float)
 
     # Exact canonical text that was sent to the embedding model
     text: Mapped[str] = mapped_column(
@@ -436,6 +387,12 @@ class ToolEmbedding(Base):
     )
 
     __table_args__ = (
+        UniqueConstraint(
+            "tool_id",
+            "embedding_type",
+            "embedding_model",
+            name="uq_tool_embedding",
+        ),
         *(
             Index(
                 f"ix_tool_embeddings_{embedding_type}_hnsw",
@@ -448,28 +405,12 @@ class ToolEmbedding(Base):
                     "m": 16,
                     "ef_construction": 64,
                 },
-                postgresql_where=sql_text(
+                postgresql_where=text(
                     f"embedding_type = '{embedding_type}' "
                     f"AND embedding_model = '{EMBEDDING_MODEL}'"
                 ),
             )
             for embedding_type in EMBEDDING_TYPES
-        ),
-        Index(
-            "uq_tool_embedding_source",
-            "tool_id",
-            "embedding_type",
-            "embedding_model",
-            unique=True,
-            postgresql_where=sql_text("enrichment_id IS NULL"),
-        ),
-        Index(
-            "uq_tool_enrichment_embedding",
-            "enrichment_id",
-            "embedding_type",
-            "embedding_model",
-            unique=True,
-            postgresql_where=sql_text("enrichment_id IS NOT NULL"),
         ),
     )
 
@@ -512,141 +453,4 @@ class HarvestSource(Base):
         nullable=False,
         server_default=func.now(),
         onupdate=func.now(),
-    )
-
-
-class ToolMetadataEnrichment(Base):
-    """Append-only generation attempts with stable model and prompt provenance."""
-
-    __tablename__ = "tool_metadata_enrichment"
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-    tool_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tool_metadata.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    run_id: Mapped[str | None] = mapped_column(String(250))
-    status: Mapped[str] = mapped_column(String(32), nullable=False)
-    enriched_description: Mapped[str | None] = mapped_column(Text)
-    is_ai_generated: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default=sql_text("false")
-    )
-    requested_model: Mapped[str] = mapped_column(String(200), nullable=False)
-    actual_model: Mapped[str | None] = mapped_column(String(200))
-    prompt_id: Mapped[str] = mapped_column(String(100), nullable=False)
-    prompt_version: Mapped[str] = mapped_column(String(50), nullable=False)
-    input_hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    generation_timestamp: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-    request_count: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default="0"
-    )
-    elapsed_seconds: Mapped[float | None] = mapped_column(Float)
-    error_code: Mapped[str | None] = mapped_column(String(100))
-    error_message: Mapped[str | None] = mapped_column(Text)
-
-    __table_args__ = (
-        CheckConstraint(
-            "status IN ('processing', 'generated', 'insufficient_metadata', 'skipped_empty_metadata', 'failed', 'up_to_date', 'skipped_inflight')",
-            name="ck_tool_metadata_enrichment_status",
-        ),
-        CheckConstraint(
-            "(status = 'generated' AND enriched_description IS NOT NULL AND length(trim(enriched_description)) > 0) OR (status <> 'generated' AND enriched_description IS NULL)",
-            name="ck_tool_metadata_enrichment_description_status",
-        ),
-        CheckConstraint(
-            "(status = 'generated' AND is_ai_generated) OR (status <> 'generated' AND NOT is_ai_generated)",
-            name="ck_tool_metadata_enrichment_ai_flag",
-        ),
-        Index(
-            "ix_tool_metadata_enrichment_tool_created",
-            "tool_id",
-            "generation_timestamp",
-        ),
-        Index("ix_tool_metadata_enrichment_status", "status"),
-        Index(
-            "uq_tool_metadata_enrichment_inflight",
-            "tool_id",
-            unique=True,
-            postgresql_where=sql_text("status = 'processing'"),
-        ),
-    )
-
-
-class ToolMetadataEnrichmentValidation(Base):
-    """Optional review results kept separate from generation outcomes."""
-
-    __tablename__ = "tool_metadata_enrichment_validation"
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-    enrichment_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tool_metadata_enrichment.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    requested_model: Mapped[str] = mapped_column(String(200), nullable=False)
-    actual_model: Mapped[str | None] = mapped_column(String(200))
-    prompt_id: Mapped[str] = mapped_column(String(100), nullable=False)
-    prompt_version: Mapped[str] = mapped_column(String(50), nullable=False)
-    status: Mapped[str] = mapped_column(String(24), nullable=False)
-    result: Mapped[dict | None] = mapped_column(JSONB)
-    error_message: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-
-    __table_args__ = (
-        Index("ix_tool_metadata_enrichment_validation_enrichment", "enrichment_id"),
-    )
-
-
-class ToolMetadataEnrichmentEmbedding(Base):
-    """Embedding for a specific generated-description attempt."""
-
-    __tablename__ = "tool_metadata_enrichment_embedding"
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-    enrichment_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tool_metadata_enrichment.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    tool_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tool_metadata.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    embedding_model: Mapped[str] = mapped_column(String(200), nullable=False)
-    actual_model: Mapped[str | None] = mapped_column(String(200))
-    text: Mapped[str] = mapped_column(Text, nullable=False)
-    vector: Mapped[list[float]] = mapped_column(Vector(768), nullable=False)
-    request_count: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default="0"
-    )
-    elapsed_seconds: Mapped[float | None] = mapped_column(Float)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-
-    __table_args__ = (
-        UniqueConstraint(
-            "enrichment_id",
-            "embedding_model",
-            name="uq_tool_metadata_enrichment_embedding",
-        ),
-        Index(
-            "ix_tool_metadata_enrichment_embedding_vector",
-            "vector",
-            postgresql_using="hnsw",
-            postgresql_ops={"vector": "vector_cosine_ops"},
-            postgresql_with={"m": 16, "ef_construction": 64},
-        ),
     )

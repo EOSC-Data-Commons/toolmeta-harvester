@@ -9,7 +9,7 @@ ENRICHED_DESCRIPTIONS = Asset("toolmeta://enriched-descriptions")
 
 
 @dag(
-    dag_id="tool_metadata_enrichment",
+    dag_id="toolmeta_enrich_description",
     schedule=None,
     catchup=False,
     max_active_runs=1,

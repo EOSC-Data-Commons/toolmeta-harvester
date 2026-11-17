@@ -14,6 +14,7 @@ api_url = "https://api.archives-ouvertes.fr/oai/hal/?verb=ListRecords&metadataPr
 record_api = "https://zenodo.org/api/records"
 
 [egi]
+llm_api_key = ""
 llm_api_url = "https://llm.ai.egi.eu/v1/chat/completions"
 generation_model = "qwen3.8-27b"
 validation_model = "qwen3.8-27b"

@@ -1,7 +1,16 @@
 from __future__ import annotations
 
 MODEL = "qwen3.8-27b"
-PROMPT_VERSION = "v3"
+MODEL_OPTIONS = {
+    "temperature": 0.7,
+    "top_p": 0.80,
+    "top_k": 20,
+    "min_p": 0.0,
+    "presence_penalty": 1.5,
+    "repetition_penalty": 1.0,
+    "chat_template_kwargs": {"enable_thinking": False},
+}
+PROMPT_VERSION = "v4"
 SYSTEM_PROMPT = """
     You are a scientific software metadata enrichment assistant.
 
@@ -11,8 +20,6 @@ SYSTEM_PROMPT = """
     discovery queries.
 
     Instructions:
-    - Understand the JSON metadata structure. 
-    - Find the most relevan parts like description, steps, publications.
     - Identify the tool's primary computational capabilities and operations.
     - Describe the scientific tasks the tool performs.
     - Preserve relevant scientific domain terminology.

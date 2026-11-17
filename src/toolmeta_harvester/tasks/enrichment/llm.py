@@ -5,6 +5,7 @@ from typing import Any
 from toolmeta_harvester.tasks.enrichment.prompts.generation import (
     MODEL,
     SYSTEM_PROMPT,
+    MODEL_OPTIONS,
 )
 
 
@@ -45,14 +46,13 @@ async def enrich_tool_metadata(
                 "content": render_user_prompt(raw_metadata),
             },
         ],
-        "temperature": 0.1,
-        "max_tokens": 300,
-        "stream": False,
+        **MODEL_OPTIONS,
     }
+
+    # print(payload)
 
     async with httpx.AsyncClient(timeout=timeout) as client:
         response = await client.post(
-            # f"{endpoint_url.rstrip('/')}/chat/completions",
             f"{endpoint_url.rstrip('/')}",
             json=payload,
             headers=headers,
@@ -60,6 +60,7 @@ async def enrich_tool_metadata(
         response.raise_for_status()
 
     data = response.json()
+    # print(data)
     description = data["choices"][0]["message"]["content"]
 
     if not isinstance(description, str):

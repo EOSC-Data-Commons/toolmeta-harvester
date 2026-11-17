@@ -27,11 +27,10 @@ def text_hash(text: str) -> str:
 
 
 @dag(
-    dag_id="toolmeta_embedding_description",
-    schedule="0 4 * * 1",
+    dag_id="toolmeta_embedding_enriched_description",
     catchup=False,
     max_active_tasks=10,
-    tags=["embedding"],
+    tags=["tool-embedding"],
 )
 def embed_descriptions():
 

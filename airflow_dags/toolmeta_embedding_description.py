@@ -2,20 +2,20 @@ import hashlib
 import uuid
 
 from airflow.sdk import dag, task
-from sqlalchemy import and_, or_, select, func, text
+from sqlalchemy import and_, or_, select, func
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert
-from toolmeta_harvester.config import egi_llm_api_key, embedding_api, embedding_model
+from toolmeta_harvester.config import egi_llm_api_key, embedding_api
 from toolmeta_harvester.db.engine import engine
 
 from toolmeta_harvester.db import database
-from toolmeta_harvester.db.models import ToolMetadata, ToolEmbedding
+from toolmeta_harvester.db.models import Base, ToolMetadata, ToolEmbedding
 from toolmeta_harvester.tasks import embedding
 
 
-EMBEDDING_MODEL = embedding_model()
+EMBEDDING_MODEL = "nomic-embed-text-v2-moe"
 EMBEDDING_TYPE = "description"
-EMBEDDING_API = embedding_api()
+EMBEDDING_API = embedding_api() or "https://llm.ai.egi.eu/embeddings"
 
 AIRFLOW_BATCH_SIZE = 500
 MIN_DESCRIPTION_LENGTH = 50
@@ -140,12 +140,7 @@ def embed_descriptions():
             stmt = insert(ToolEmbedding).values(values)
 
             stmt = stmt.on_conflict_do_update(
-                index_elements=[
-                    ToolEmbedding.tool_id,
-                    ToolEmbedding.embedding_type,
-                    ToolEmbedding.embedding_model,
-                ],
-                index_where=text("enrichment_id IS NULL"),
+                constraint="uq_tool_embedding",
                 set_={
                     "text": stmt.excluded.text,
                     "vector": stmt.excluded.vector,

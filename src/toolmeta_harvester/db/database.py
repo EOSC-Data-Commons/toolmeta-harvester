@@ -7,6 +7,7 @@ from sqlalchemy.schema import CreateColumn
 from toolmeta_harvester.db.engine import Base, engine
 from toolmeta_harvester.db.models import (
     ToolMetadata,
+    ToolMetadataEnrichment,
     ToolEmbedding,
     HarvestSource,
 )
@@ -24,6 +25,7 @@ SCHEMA_VERSION = 1
 TABLES = [
     ToolMetadata.__table__,
     ToolEmbedding.__table__,
+    ToolMetadataEnrichment.__table__,
     HarvestSource.__table__,
 ]
 

@@ -5,12 +5,9 @@ description = "Metadata harvesting and enrichment framework for the EOSC Data Co
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "alembic>=1.16.0",
     "beautifulsoup4>=4.15.0",
     "dynaconf>=3.2.12",
     "pgvector>=0.5.0",
-    "python-dotenv>=1.1.0",
-    "pydantic>=2.11.0",
     "psycopg[binary]>=3.3.2",
     "pygithub>=2.8.1",
     "pyyaml>=6.0.3",
@@ -19,9 +16,6 @@ dependencies = [
     "sqlalchemy>=2.0.45",
     "transformers>=5.18.0",
 ]
-
-[dependency-groups]
-dev = ["mypy>=1.15.0", "pytest>=8.3.0", "ruff>=0.11.0", "types-requests>=2.32.0"]
 
 [build-system]
 requires = ["hatchling"]
@@ -37,11 +31,3 @@ known_first_party = ["toolmeta_harvester"]
 beautifulsoup4 = ["bs4"]
 pyyaml = ["yaml"]
 pygithub = ["github"]
-
-[tool.pytest.ini_options]
-pythonpath = ["src", "."]
-testpaths = ["src/tests"]
-
-# [tool.uv.sources]
-# toolmeta-models = { git = "https://github.com/EOSC-Data-Commons/toolmeta-models.git", rev = "v0.2.5" }
-# mimedb = { git = "https://github.com/Dans-labs/mimedb.git", rev = "v0.1.2" }

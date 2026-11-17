@@ -4,7 +4,7 @@
 
 The Tool Metadata Harvester collects descriptions of research software, computational tools, and workflows from external registries and software repositories. It transforms source-specific records into a common metadata representation and persists them in PostgreSQL for discovery, indexing, and downstream matching services.
 
-> **Deployment:** This project is designed to run as scheduled workflows in **Apache Airflow**. For the shared Airflow infrastructure, installation, and operational instructions, see **[EOSC Data Commons — metadata-airflow](https://github.com/EOSC-Data-Commons/metadata-airflow)**. This repository contains the harvester implementation and its Airflow DAG definitions; it is not a standalone Airflow deployment.
+> **Deployment:** This project is designed to run as scheduled workflows in **Apache Airflow**. For the shared Airflow infrastructure, installation, and operational instructions, see **[EOSC Data Commons — metadata-warehouse](https://github.com/EOSC-Data-Commons/metadata-warehouse)**. This repository contains the harvester implementation and its Airflow DAG definitions; it is not a standalone Airflow deployment.
 
 ## What it does
 
@@ -29,7 +29,7 @@ flowchart TD
     DB --> E[Embedding and indexing workflows]
     E --> DB
     DB --> API[Downstream Tool Registry API]
-    A[Apache Airflow in metadata-airflow] -. schedules and monitors .-> H
+    A[Apache Airflow in metadata-warehouse] -. schedules and monitors .-> H
     A -. schedules and monitors .-> E
 ```
 
@@ -49,11 +49,11 @@ Airflow orchestrates the pipelines and provides scheduling, task execution, logg
 
 ## Running with Apache Airflow (recommended)
 
-The shared deployment is maintained separately in **[metadata-airflow](https://github.com/EOSC-Data-Commons/metadata-airflow)**. It uses Apache Airflow with CeleryExecutor, PostgreSQL, RabbitMQ, and Git DAG bundles, allowing different harvester repositories to supply their own pipelines.
+The shared deployment is maintained separately in **[metadata-warehouse](https://github.com/EOSC-Data-Commons/metadata-warehouse)**. It uses Apache Airflow with CeleryExecutor, PostgreSQL, RabbitMQ, and Git DAG bundles, allowing different harvester repositories to supply their own pipelines.
 
 To deploy this harvester:
 
-1. Clone and configure the [`metadata-airflow` repository](https://github.com/EOSC-Data-Commons/metadata-airflow).
+1. Clone and configure the [`metadata-warehouse` repository](https://github.com/EOSC-Data-Commons/metadata-warehouse).
 2. Install this repository as a Python package in the Airflow runtime image (scheduler, DAG processor, and workers as applicable).
 3. Configure an Airflow Git DAG bundle pointing to this repository's `airflow_dags/` directory.
 4. Configure the Tool Registry database connection, credentials, and other settings required by the pipelines.
@@ -66,7 +66,7 @@ The Airflow deployment documentation includes examples for the Python package in
 
 ### Useful Airflow commands
 
-Run these from the `metadata-airflow` repository:
+Run these from the `metadata-warehouse` repository:
 
 ```bash
 make up                 # Start the Airflow deployment
@@ -74,7 +74,7 @@ make dags               # List discovered DAGs
 make dags-errors        # Inspect DAG import errors
 ```
 
-The Airflow UI is available at `http://localhost:8080` with the default local deployment configuration. Refer to [`metadata-airflow` documentation](https://github.com/EOSC-Data-Commons/metadata-airflow) for environment setup, service commands, and troubleshooting.
+The Airflow UI is available at `http://localhost:8080` with the default local deployment configuration. Refer to [`metadata-warehouse` documentation](https://github.com/EOSC-Data-Commons/metadata-warehouse) for environment setup, service commands, and troubleshooting.
 
 ## Local development
 
@@ -94,7 +94,7 @@ git clone https://github.com/EOSC-Data-Commons/toolmeta-harvester.git
 cd toolmeta-harvester
 ```
 
-Configure any required secrets in `config/.secrets.toml`, then run:
+Copy `.env.example` to `.env`, add local database and LLM credentials, then run:
 
 ```bash
 make install
@@ -145,7 +145,7 @@ When adding a DAG or changing a pipeline's callable interface, update the Airflo
 
 ## Related repositories
 
-- **[metadata-airflow](https://github.com/EOSC-Data-Commons/metadata-airflow)** — Shared Airflow infrastructure that schedules and executes harvesting DAGs.
+- **[metadata-warehouse](https://github.com/EOSC-Data-Commons/metadata-warehouse)** — Shared Airflow infrastructure that schedules and executes harvesting DAGs.
 - **[EOSC Data Commons](https://github.com/EOSC-Data-Commons)** — Organisation repositories for associated metadata, catalogue, and data discovery components.
 
 ## Project status
@@ -156,83 +156,148 @@ The project is under active development. Supported sources, metadata mappings, d
 
 Licensed under the [Apache License 2.0](LICENSE).
 
-## Semantic enrichment experiment (A/B)
+## LLM metadata enrichment
 
-This experiment checks whether a structured semantic extraction step improves
-short, factual tool descriptions for discovery and tool–dataset matching. It
-uses the existing ToolDB and keeps generated data in dedicated tables; it does
-not change harvested source metadata.
+The production path is deliberately one-step:
 
-### Pipeline
-
-- **Sample:** `scripts/create_experiment_sample.py` creates and persists one
-  stratified 100-tool sample (70 BioTools records and 30 sampled across other
-  sources). The JSON records the IDs, strata, source counts, and a checksum.
-  Both variants must use this exact file; the pipeline verifies its checksum.
-- **A:** generates a description directly from normalized and allowlisted raw
-  source metadata.
-- **B:** extracts a structured semantic profile first, then generates a
-  description from the same source metadata plus that profile.
-- **Validation:** deterministic checks and an LLM review run independently;
-  validation does not block embedding.
-- **Embedding:** an Airflow Asset event from enrichment schedules embedding for
-  completed descriptions. Each vector points to the exact enrichment row.
-
-`tool_enrichments` stores one row per tool, experiment UUID, and variant.
-There is no experiment/run table. Rows preserve extraction, generation and
-validation requested/actual model names, prompt versions, input hashes, request
-counts, timings, validation results, and failures. The API-reported model is
-recorded separately from the configured model; automatic model fallbacks are
-disabled so A/B comparisons remain attributable. `tool_embeddings` stores
-vectors and their requested/actual model, batch ID, request count and latency.
-Source metadata embeddings may still have a NULL `enrichment_id`.
-
-### Configuration and execution
-
-Configuration is loaded from `config/config.toml` and Dynaconf environment
-variables prefixed `TOOLMETA_HARVESTER_`. In Airflow, set the corresponding
-values in the local warehouse `.env`; keep API keys out of source control and
-reports. Model and endpoint settings include:
-
-- `EGI__LLM_API_URL`, `EGI__LLM_API_KEY`, `EGI__LLM_MODEL`
-- `EGI__EXTRACTION_MODEL`, `EGI__GENERATION_MODEL`, `EGI__VALIDATION_MODEL`
-- `EGI__LLM_TIMEOUT`, `EGI__LLM_MAX_RETRIES`
-- `EGI__EMBEDDING_API`, `EGI__EMBEDDING_MODEL`
-
-The API client uses the configured model without a fallback. Transient request
-retries are counted and included in the result provenance. Check `config.toml`
-for the defaults. Apply schema updates with `alembic upgrade head`.
-
-Three local Airflow DAGs handle the stages:
-
-- `tool_metadata_enrichment` takes `experiment_id`, `variant` (`A` or `B`),
-  and optional `sample_path` in its run configuration. It emits the enriched
-  description Asset after successful completion.
-- `tool_metadata_embedding` runs when that Asset is updated and embeds all
-  completed enrichment rows missing a vector, whether or not validation ran.
-- `tool_metadata_validation` takes the same experiment, variant, and sample
-  configuration and is independent from embedding.
-
-For reproducibility, trigger A and B with the same UUID and sample path. A
-persisted record can be inspected with
-[`reports/enrichment_manual_review.sql`](reports/enrichment_manual_review.sql):
-replace the placeholder UUID in `selected_experiment`. The query joins the raw
-source attributes, extraction output, both descriptions, validation,
-per-stage model and prompt provenance, metrics, and embedding similarity.
-
-Generate comparison and expert-review artifacts from the completed database
-results with:
-
-```sh
-PYTHONPATH=src python scripts/generate_experiment_report.py \
-  --experiment-id <UUID> \
-  --sample-path experiments/<experiment>/representative_sample_100.json \
-  --output-dir experiments/<experiment>
+```text
+ToolMetadata.raw_metadata -> generation LLM -> tool_metadata_enrichment
 ```
 
-The report directory contains summary metrics, JSONL records, a side-by-side
-CSV for expert review, an HTML comparison page, and an experiment narrative.
-LLM scores are useful signals, not ground truth. Human review remains needed
-before treating the descriptions as authoritative. The API may not report
-usage or price; in that case the report provides request counts and latency as
-observable cost proxies.
+It does not run semantic extraction or automatic LLM-as-judge evaluation. Generated descriptions are discovery aids and are explicitly marked as AI-generated in the enrichment table. Source records and `raw_metadata` remain unchanged.
+
+The enrichment outcomes are:
+
+- `generated`: a non-empty description was validated and persisted.
+- `skipped_empty_metadata`: the source payload was empty; no request was made.
+- `insufficient_metadata`: the model reported that the payload did not support a reliable description; no description is stored.
+- `failed`: a request or response could not be completed after bounded retries; any older successful attempt remains stored.
+- `up_to_date`: a matching input/model/prompt result already exists.
+
+Every attempt explicitly records whether the description is AI-generated and stores the requested model, API-reported model where available, prompt ID and version, generation timestamp, input hash, request count, Airflow run ID, and outcome. `date_modified` is useful for prioritization but does not define whether the prompt input changed. The SHA-256 input hash is calculated from the exact UTF-8 user-message text, which contains the canonical JSON representation of the full `raw_metadata` (`ensure_ascii=False`, sorted object keys, compact separators). Equal canonical inputs produce equal hashes. A result is reusable only when the hash, requested model, prompt ID, and prompt version all match. A model or prompt change therefore triggers a new attempt without removing historical results.
+
+### Local configuration
+
+Copy `.env.example` to `.env` and fill in the local ToolDB password and EGI key. The settings loader uses Dynaconf with `config/config.toml` defaults and `TOOLMETA_HARVESTER_` environment overrides (`SECTION__KEY` maps to nested TOML settings). Host-side `.env` uses `localhost`; the `metadata-warehouse` Airflow containers use the PostgreSQL service hostname and receive settings through that repository's Compose environment. The harvester `.env` is not automatically read by containers in the other repository.
+
+| Variable | Purpose | Required for | Safe example/default |
+| --- | --- | --- | --- |
+| `TOOLMETA_HARVESTER_DATABASE__HOST` | PostgreSQL host | Enrichment and harvesting | `localhost` on host; `postgres` in Compose |
+| `TOOLMETA_HARVESTER_DATABASE__PORT` | PostgreSQL port | Enrichment and harvesting | `5432` |
+| `TOOLMETA_HARVESTER_DATABASE__NAME` | Database name | Enrichment and harvesting | `tooldb` |
+| `TOOLMETA_HARVESTER_DATABASE__USER` | Database role | Enrichment and harvesting | `admin` (local only) |
+| `TOOLMETA_HARVESTER_DATABASE__PASSWORD` | Database password | Enrichment and harvesting | Secret; set locally |
+| `TOOLMETA_HARVESTER_EGI__LLM_API_KEY` | EGI bearer credential | Generation, optional validation, embeddings | Secret; set locally |
+| `TOOLMETA_HARVESTER_EGI__LLM_API_URL` | Chat-completions endpoint | Generation and validation | `https://llm.ai.egi.eu/v1/chat/completions` |
+| `TOOLMETA_HARVESTER_EGI__GENERATION_MODEL` | Requested generation model | Generation | `qwen3.8-27b` |
+| `TOOLMETA_HARVESTER_EGI__VALIDATION_MODEL` | Requested optional review model | Manual validation only | `qwen3.8-27b` |
+| `TOOLMETA_HARVESTER_EGI__EMBEDDING_API` | Embeddings endpoint | Embeddings | `https://llm.ai.egi.eu/v1/embeddings` |
+| `TOOLMETA_HARVESTER_EGI__EMBEDDING_MODEL` | Requested embedding model | Embeddings | `nomic-embed-text-v2-moe` |
+| `TOOLMETA_HARVESTER_EGI__LLM_TIMEOUT` | Per-request timeout, seconds | Generation/validation/embedding | `180` |
+| `TOOLMETA_HARVESTER_EGI__LLM_MAX_RETRIES` | Maximum configured retry attempts | Generation and validation | `3` |
+| `TOOLMETA_HARVESTER_GITHUB__API_KEY` | GitHub API credential | GitHub harvesting only | Optional secret; not needed for enrichment |
+
+The local harvester `.env` contains actual local database and EGI credentials and is Git-ignored. The sibling `metadata-warehouse/.env` separately supplies Airflow's database settings, EGI key and embedding endpoint. Its Compose file currently leaves the other EGI endpoint/model/timeout settings at the checked-in TOML defaults; to override those for Airflow, define the variables in that `.env` and pass them through the Airflow service environment. Production must provide secrets through its deployment secret store, not either repository's committed files.
+
+### Airflow operations
+
+`tool_metadata_enrichment` is manual by default. Trigger with one of:
+
+```json
+{"limit": 100}
+```
+
+```json
+{"tool_ids": ["<uuid>", "<uuid>"]}
+```
+
+```json
+{"full_catalog": true}
+```
+
+A full-catalog run is explicit and should be coordinated with database/API capacity planning. Airflow maps records into batches of 10 (bounded concurrency), while each record attempt is committed separately. After the mapped generation batches finish, one Airflow Asset event starts `tool_metadata_embedding`, which independently maps all current results missing vectors into bounded batches. Validation is not part of that dependency chain.
+
+`tool_metadata_validation` is an independent manual DAG. It accepts `tool_ids`, `enrichment_ids`, or a bounded `limit` (maximum 1000). Its results are stored in `tool_metadata_enrichment_validation` and never change generated text or its status.
+
+`tool_metadata_processing_report` runs without an LLM call. Supply an enrichment `run_id`, or `since` and `until` ISO timestamps. Without parameters it reports the previous 24 hours. It reports selected outcomes, failures and IDs, request/retry totals, duration, average generation latency, throughput, and the remaining catalog count not represented in the selected interval.
+
+### Database migrations
+
+Alembic in this repository owns versioned enrichment schema changes. The normal harvesting initializer only creates or updates the source metadata tables; it never creates enrichment tables with `create_all()`.
+
+For an existing ToolDB, use the same `toolmeta-harvester` checkout/tag as the DAG package and run:
+
+```bash
+uv sync --frozen
+uv run alembic current
+uv run alembic upgrade head
+```
+
+Review the reported current revision before applying the upgrade. The production migration is additive and keeps old experimental rows and harvested source data. Do not run schema changes against production until the migration has been reviewed and tested in staging. For a new local database, initialize the ordinary harvester schema first, then apply Alembic migrations. See [the Airflow and database runbook](docs/airflow-runbook.md) for deployment ordering and verification queries.
+
+### Manual review query
+
+This query shows source metadata, the latest enrichment attempt and its provenance, optional validation records, and embeddings for manual quality checks:
+
+```sql
+SELECT
+    tm.id AS tool_id,
+    tm.title,
+    tm.metadata_format,
+    tm.source_url,
+    tm.date_modified,
+    tm.raw_metadata,
+    e.id AS enrichment_id,
+    e.status AS enrichment_status,
+    e.enriched_description,
+    e.is_ai_generated,
+    e.requested_model,
+    e.actual_model,
+    e.prompt_id,
+    e.prompt_version,
+    e.input_hash,
+    e.generation_timestamp,
+    e.run_id AS airflow_run_id,
+    e.request_count,
+    e.elapsed_seconds AS generation_seconds,
+    e.error_code,
+    e.error_message,
+    COALESCE(v.validation_results, '[]'::jsonb) AS validation_results,
+    COALESCE(b.embeddings, '[]'::jsonb) AS embeddings
+FROM tool_metadata AS tm
+LEFT JOIN LATERAL (
+    SELECT *
+    FROM tool_metadata_enrichment AS candidate
+    WHERE candidate.tool_id = tm.id
+    ORDER BY candidate.generation_timestamp DESC, candidate.id DESC
+    LIMIT 1
+) AS e ON TRUE
+LEFT JOIN LATERAL (
+    SELECT jsonb_agg(jsonb_build_object(
+        'status', val.status,
+        'requested_model', val.requested_model,
+        'actual_model', val.actual_model,
+        'prompt_id', val.prompt_id,
+        'prompt_version', val.prompt_version,
+        'result', val.result,
+        'error', val.error_message,
+        'created_at', val.created_at
+    ) ORDER BY val.created_at DESC) AS validation_results
+    FROM tool_metadata_enrichment_validation AS val
+    WHERE val.enrichment_id = e.id
+) AS v ON TRUE
+LEFT JOIN LATERAL (
+    SELECT jsonb_agg(jsonb_build_object(
+        'model', emb.embedding_model,
+        'actual_model', emb.actual_model,
+        'text', emb.text,
+        'created_at', emb.created_at
+    ) ORDER BY emb.created_at DESC) AS embeddings
+    FROM tool_metadata_enrichment_embedding AS emb
+    WHERE emb.enrichment_id = e.id
+) AS b ON TRUE
+ORDER BY tm.title NULLS LAST, tm.id
+LIMIT 100;
+```
+
+Previous A/B sample reports under `experiments/` are retained as historical evidence. They are not used by the production DAGs.

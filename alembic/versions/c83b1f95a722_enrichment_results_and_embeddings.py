@@ -21,21 +21,31 @@ depends_on = None
 def upgrade() -> None:
     # This derived source column was absent from the clean local staging dump,
     # although the current ToolMetadata model and harvesting code require it.
-    op.add_column(
-        "tool_metadata",
-        sa.Column(
-            "search_types",
-            postgresql.ARRAY(sa.Text()),
-            server_default="{}",
-            nullable=False,
-        ),
-    )
-    op.create_index(
-        "ix_tool_metadata_search_types_gin",
-        "tool_metadata",
-        ["search_types"],
-        postgresql_using="gin",
-    )
+    columns = {
+        column["name"]
+        for column in sa.inspect(op.get_bind()).get_columns("tool_metadata")
+    }
+    if "search_types" not in columns:
+        op.add_column(
+            "tool_metadata",
+            sa.Column(
+                "search_types",
+                postgresql.ARRAY(sa.Text()),
+                server_default="{}",
+                nullable=False,
+            ),
+        )
+    indexes = {
+        index["name"]
+        for index in sa.inspect(op.get_bind()).get_indexes("tool_metadata")
+    }
+    if "ix_tool_metadata_search_types_gin" not in indexes:
+        op.create_index(
+            "ix_tool_metadata_search_types_gin",
+            "tool_metadata",
+            ["search_types"],
+            postgresql_using="gin",
+        )
     op.execute(
         """CREATE OR REPLACE FUNCTION update_tool_search_types()
         RETURNS trigger AS $$
@@ -60,6 +70,7 @@ def upgrade() -> None:
         END;
         $$ LANGUAGE plpgsql"""
     )
+    op.execute("DROP TRIGGER IF EXISTS trg_tool_search_types ON tool_metadata")
     op.execute(
         """CREATE TRIGGER trg_tool_search_types
         BEFORE INSERT OR UPDATE OF types, programming_languages,
@@ -213,21 +224,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index(
-        "ix_tool_embeddings_enriched_description_hnsw", table_name="tool_embeddings"
-    )
-    op.drop_index("uq_tool_enrichment_embedding", table_name="tool_embeddings")
-    op.drop_index("uq_tool_embedding_source", table_name="tool_embeddings")
-    op.drop_index("ix_tool_embeddings_embedding_batch_id", table_name="tool_embeddings")
-    op.drop_index("ix_tool_embeddings_enrichment_id", table_name="tool_embeddings")
-    op.drop_index("ix_tool_embeddings_tool_id", table_name="tool_embeddings")
-    op.drop_table("tool_embeddings")
-    op.drop_index("ix_tool_enrichments_status", table_name="tool_enrichments")
-    op.drop_index(
-        "ix_tool_enrichments_experiment_variant", table_name="tool_enrichments"
-    )
-    op.drop_table("tool_enrichments")
-    op.execute("DROP TRIGGER IF EXISTS trg_tool_search_types ON tool_metadata")
-    op.execute("DROP FUNCTION IF EXISTS update_tool_search_types()")
-    op.drop_index("ix_tool_metadata_search_types_gin", table_name="tool_metadata")
-    op.drop_column("tool_metadata", "search_types")
+    # This revision may already contain user-generated A/B results. Keep those
+    # records, their vectors, and the derived source index when rolling code back.
+    pass

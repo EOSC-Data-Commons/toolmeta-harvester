@@ -360,7 +360,7 @@ def analyze_experiment(
     lengths = {
         variant: _summary(
             [
-                float(len((row.get("enriched_description") or "")))
+                float(len(row.get("enriched_description") or ""))
                 for row in variant_rows[variant]
                 if row.get("enriched_description")
             ]

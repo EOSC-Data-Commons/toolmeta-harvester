@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import random
 import re
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -27,7 +29,7 @@ class LLMCompletion:
 
 
 class EgiChatClient:
-    """OpenAI-compatible EGI chat client with bounded transient retries."""
+    """OpenAI-compatible EGI client with bounded transient and malformed-response retries."""
 
     def __init__(
         self,
@@ -45,12 +47,23 @@ class EgiChatClient:
         self.timeout = timeout if timeout is not None else llm_timeout()
         self.retries = retries if retries is not None else llm_retries()
         self.session = session or requests.Session()
+        self._owns_session = session is None
         self.last_request_count = 0
         self.last_elapsed_seconds = 0.0
-        if not self.api_key or self.api_key.casefold() in {"your_key", "changeme"}:
+        if not self.api_key or self.api_key.casefold().startswith("replace_"):
             raise ValueError("EGI LLM API key must be configured")
+        if self.retries < 0 or self.timeout <= 0:
+            raise ValueError(
+                "LLM timeout must be positive and retries cannot be negative"
+            )
 
-    def complete_json(self, system_prompt: str, user_prompt: str) -> LLMCompletion:
+    def complete_json(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        *,
+        validator: Callable[[dict[str, Any]], Any] | None = None,
+    ) -> LLMCompletion:
         started = time.perf_counter()
         self.last_request_count = 0
         messages = [
@@ -82,17 +95,42 @@ class EgiChatClient:
                         or response.status_code >= 500
                     ):
                         if attempt < self.retries:
-                            time.sleep(min(2**attempt, 8))
+                            self._backoff(attempt, response.headers.get("Retry-After"))
                             continue
+                        raise RuntimeError(
+                            f"EGI chat completion returned transient HTTP {response.status_code}"
+                        )
                     if not response.ok:
                         raise RuntimeError(
-                            f"EGI chat completion returned HTTP {response.status_code}"
+                            f"EGI chat completion returned permanent HTTP {response.status_code}"
                         )
-                    content, actual_model = self._response_content(response)
-                    if not isinstance(content, str) or not content.strip():
-                        raise ValueError("EGI chat completion returned empty content")
+                    try:
+                        content, actual_model = self._response_content(response)
+                        if not isinstance(content, str) or not content.strip():
+                            raise ValueError("Empty model response")
+                        data = self._parse_json(content)
+                        if validator is not None:
+                            validated = validator(data)
+                            data = (
+                                validated.model_dump(mode="json")
+                                if hasattr(validated, "model_dump")
+                                else dict(validated)
+                            )
+                    except (
+                        KeyError,
+                        TypeError,
+                        ValueError,
+                        json.JSONDecodeError,
+                    ) as exc:
+                        last_error = exc
+                        if attempt < self.retries:
+                            self._backoff(attempt)
+                            continue
+                        raise RuntimeError(
+                            "EGI chat completion returned an invalid JSON response"
+                        ) from exc
                     return LLMCompletion(
-                        data=self._parse_json(content),
+                        data=data,
                         requested_model=self.model,
                         actual_model=actual_model,
                         request_count=self.last_request_count,
@@ -102,65 +140,52 @@ class EgiChatClient:
                     last_error = exc
                     if attempt == self.retries:
                         break
-                    time.sleep(min(2**attempt, 8))
+                    self._backoff(attempt)
                 except requests.RequestException as exc:
                     last_error = exc
                     if attempt == self.retries:
                         break
-                    time.sleep(min(2**attempt, 8))
+                    self._backoff(attempt)
                 finally:
                     if response is not None:
                         response.close()
             raise RuntimeError(
-                f"EGI chat completion failed after {self.last_request_count} requests"
+                f"EGI chat completion failed after {self.last_request_count} request(s)"
             ) from last_error
         finally:
             self.last_elapsed_seconds = time.perf_counter() - started
+            if self._owns_session:
+                self.session.close()
+
+    @staticmethod
+    def _backoff(attempt: int, retry_after: str | None = None) -> None:
+        try:
+            delay = (
+                min(max(float(retry_after), 0), 30)
+                if retry_after
+                else min(2**attempt, 8)
+            )
+        except ValueError:
+            delay = min(2**attempt, 8)
+        time.sleep(delay + random.uniform(0, min(0.5, delay / 4)))
 
     @staticmethod
     def _response_content(response: requests.Response) -> tuple[str, str | None]:
-        content_type = response.headers.get("Content-Type", "").casefold()
-        if "text/event-stream" not in content_type:
-            body = response.json()
-            return body["choices"][0]["message"]["content"], body.get("model")
-
-        chunks: list[str] = []
-        actual_model: str | None = None
-        for line in response.iter_lines(decode_unicode=True):
-            if isinstance(line, bytes):
-                line = line.decode("utf-8", errors="replace")
-            if not line or not line.startswith("data:"):
-                continue
-            event = line[5:].strip()
-            if event == "[DONE]":
-                break
-            try:
-                body = json.loads(event)
-            except json.JSONDecodeError as exc:
-                raise ValueError("Malformed EGI streaming response") from exc
-            if isinstance(body.get("model"), str):
-                actual_model = body["model"]
-            choices = body.get("choices") or []
-            if choices:
-                part = (choices[0].get("delta") or {}).get("content")
-                if isinstance(part, str):
-                    chunks.append(part)
-        return "".join(chunks), actual_model
+        body = response.json()
+        return body["choices"][0]["message"]["content"], body.get("model")
 
     @staticmethod
     def _parse_json(content: str) -> dict[str, Any]:
-        cleaned = content.strip()
-        cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(
+            r"^```(?:json)?\s*|\s*```$", "", content.strip(), flags=re.IGNORECASE
+        )
         try:
             parsed = json.loads(cleaned)
         except json.JSONDecodeError:
             start, end = cleaned.find("{"), cleaned.rfind("}")
             if start < 0 or end <= start:
                 raise ValueError("LLM response did not contain a JSON object")
-            try:
-                parsed = json.loads(cleaned[start : end + 1])
-            except json.JSONDecodeError as exc:
-                raise ValueError("LLM response contained malformed JSON") from exc
+            parsed = json.loads(cleaned[start : end + 1])
         if not isinstance(parsed, dict):
             raise TypeError("LLM response JSON must be an object")
         return parsed

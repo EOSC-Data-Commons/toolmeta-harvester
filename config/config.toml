@@ -2,14 +2,10 @@
 host = "localhost"
 port = 5432
 name = "tooldb"
-user = "harvester"
-password = "yoursecretsecret"
+user = "admin"
 
 [github]
-api_key="your_github_api_key"
-
-[default]
-log_file = "@format {env[BASE_DIR]}/logs/tools.log"
+api_key = ""
 
 [hal]
 api_url = "https://api.archives-ouvertes.fr/oai/hal/?verb=ListRecords&metadataPrefix=oai_datacite&set=collection:LINKED_RESEARCH_OUTPUTS"
@@ -18,10 +14,7 @@ api_url = "https://api.archives-ouvertes.fr/oai/hal/?verb=ListRecords&metadataPr
 record_api = "https://zenodo.org/api/records"
 
 [egi]
-llm_api_key="your_key"
 llm_api_url = "https://llm.ai.egi.eu/v1/chat/completions"
-llm_model = "qwen3.8-27b"
-extraction_model = "qwen3.8-27b"
 generation_model = "qwen3.8-27b"
 validation_model = "qwen3.8-27b"
 embedding_api = "https://llm.ai.egi.eu/v1/embeddings"

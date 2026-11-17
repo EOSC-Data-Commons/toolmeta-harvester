@@ -1,17 +1,4 @@
-from __future__ import annotations
-
-import os
-from pathlib import Path
-
 from airflow.sdk import dag, get_current_context, task
-
-DEFAULT_SAMPLE = (
-    "experiments/2026-11-03_0218_representative-100_extraction-comparison/"
-    "representative_sample_100.json"
-)
-TOOLMETA_ROOT = Path(
-    os.environ.get("TOOLMETA_HARVESTER_ROOT", "/opt/airflow/toolmeta-harvester-source")
-)
 
 
 @dag(
@@ -19,36 +6,30 @@ TOOLMETA_ROOT = Path(
     schedule=None,
     catchup=False,
     max_active_runs=1,
-    tags=["toolmeta", "validation"],
-    doc_md="""
-    Independently validate one completed enrichment variant.
-
-    Deterministic checks are stored with the enrichment result. This DAG adds
-    supplementary LLM-as-judge scores and issues; neither validation level is
-    a gate for the embedding DAG.
+    tags=["toolmeta", "validation", "manual"],
+    doc_md="""Optional LLM review of selected generated descriptions. It runs independently and
+    never changes generated text or gates enrichment or embedding. Supply `tool_ids`,
+    `enrichment_ids`, or a bounded `limit` (default 100, maximum 1000).
     """,
 )
 def tool_metadata_validation():
-    @task(retries=1)
-    def validate_representative_sample() -> dict:
-        from toolmeta_harvester.enrichment.pipeline import run_validation_sample
+    @task(retries=0)
+    def validate_selected_results() -> dict:
+        from toolmeta_harvester.enrichment import run_validation
 
         context = get_current_context()
-        config = context["dag_run"].conf or {}
-        experiment_id = config.get("experiment_id")
-        variant = config.get("variant")
-        if not experiment_id or variant not in {"A", "B"}:
-            raise ValueError("DAG run config requires experiment_id and variant A or B")
-        sample_path = Path(config.get("sample_path", DEFAULT_SAMPLE))
-        if not sample_path.is_absolute():
-            sample_path = TOOLMETA_ROOT / sample_path
-        return run_validation_sample(
-            experiment_id=experiment_id,
-            variant=variant,
-            sample_path=sample_path,
+        conf = context["dag_run"].conf or {}
+        unknown = set(conf) - {"tool_ids", "enrichment_ids", "limit"}
+        if unknown:
+            raise ValueError(f"Unsupported validation parameters: {sorted(unknown)}")
+        return run_validation(
+            tool_ids=conf.get("tool_ids"),
+            enrichment_ids=conf.get("enrichment_ids"),
+            limit=conf.get("limit", 100),
+            run_id=context["dag_run"].run_id,
         )
 
-    validate_representative_sample()
+    validate_selected_results()
 
 
 tool_metadata_validation()

@@ -11,16 +11,14 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
-    Integer,
-    Boolean,
     String,
     Text,
     UniqueConstraint,
-    Index,
-    text as sql_text,
     func,
 )
+from sqlalchemy import text as sql_text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -514,4 +512,141 @@ class HarvestSource(Base):
         nullable=False,
         server_default=func.now(),
         onupdate=func.now(),
+    )
+
+
+class ToolMetadataEnrichment(Base):
+    """Append-only generation attempts with stable model and prompt provenance."""
+
+    __tablename__ = "tool_metadata_enrichment"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tool_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tool_metadata.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    run_id: Mapped[str | None] = mapped_column(String(250))
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    enriched_description: Mapped[str | None] = mapped_column(Text)
+    is_ai_generated: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=sql_text("false")
+    )
+    requested_model: Mapped[str] = mapped_column(String(200), nullable=False)
+    actual_model: Mapped[str | None] = mapped_column(String(200))
+    prompt_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    prompt_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    input_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    generation_timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    request_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="0"
+    )
+    elapsed_seconds: Mapped[float | None] = mapped_column(Float)
+    error_code: Mapped[str | None] = mapped_column(String(100))
+    error_message: Mapped[str | None] = mapped_column(Text)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('processing', 'generated', 'insufficient_metadata', 'skipped_empty_metadata', 'failed', 'up_to_date', 'skipped_inflight')",
+            name="ck_tool_metadata_enrichment_status",
+        ),
+        CheckConstraint(
+            "(status = 'generated' AND enriched_description IS NOT NULL AND length(trim(enriched_description)) > 0) OR (status <> 'generated' AND enriched_description IS NULL)",
+            name="ck_tool_metadata_enrichment_description_status",
+        ),
+        CheckConstraint(
+            "(status = 'generated' AND is_ai_generated) OR (status <> 'generated' AND NOT is_ai_generated)",
+            name="ck_tool_metadata_enrichment_ai_flag",
+        ),
+        Index(
+            "ix_tool_metadata_enrichment_tool_created",
+            "tool_id",
+            "generation_timestamp",
+        ),
+        Index("ix_tool_metadata_enrichment_status", "status"),
+        Index(
+            "uq_tool_metadata_enrichment_inflight",
+            "tool_id",
+            unique=True,
+            postgresql_where=sql_text("status = 'processing'"),
+        ),
+    )
+
+
+class ToolMetadataEnrichmentValidation(Base):
+    """Optional review results kept separate from generation outcomes."""
+
+    __tablename__ = "tool_metadata_enrichment_validation"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    enrichment_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tool_metadata_enrichment.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    requested_model: Mapped[str] = mapped_column(String(200), nullable=False)
+    actual_model: Mapped[str | None] = mapped_column(String(200))
+    prompt_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    prompt_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    status: Mapped[str] = mapped_column(String(24), nullable=False)
+    result: Mapped[dict | None] = mapped_column(JSONB)
+    error_message: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        Index("ix_tool_metadata_enrichment_validation_enrichment", "enrichment_id"),
+    )
+
+
+class ToolMetadataEnrichmentEmbedding(Base):
+    """Embedding for a specific generated-description attempt."""
+
+    __tablename__ = "tool_metadata_enrichment_embedding"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    enrichment_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tool_metadata_enrichment.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    tool_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tool_metadata.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    embedding_model: Mapped[str] = mapped_column(String(200), nullable=False)
+    actual_model: Mapped[str | None] = mapped_column(String(200))
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    vector: Mapped[list[float]] = mapped_column(Vector(768), nullable=False)
+    request_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="0"
+    )
+    elapsed_seconds: Mapped[float | None] = mapped_column(Float)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "enrichment_id",
+            "embedding_model",
+            name="uq_tool_metadata_enrichment_embedding",
+        ),
+        Index(
+            "ix_tool_metadata_enrichment_embedding_vector",
+            "vector",
+            postgresql_using="hnsw",
+            postgresql_ops={"vector": "vector_cosine_ops"},
+            postgresql_with={"m": 16, "ef_construction": 64},
+        ),
     )

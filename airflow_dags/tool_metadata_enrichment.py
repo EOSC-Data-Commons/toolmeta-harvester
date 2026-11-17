@@ -1,104 +1,166 @@
-from __future__ import annotations
+import asyncio
+import logging
+import uuid
 
-from datetime import timedelta
+from airflow.sdk import dag, task
+from sqlalchemy import select, func, or_
+from sqlalchemy.orm import Session
 
-from airflow.exceptions import AirflowFailException
-from airflow.sdk import Asset, dag, get_current_context, task
+from toolmeta_harvester.config import egi_llm_api_key, llm_api
+from toolmeta_harvester.db.engine import engine
+from toolmeta_harvester.db import database
+from toolmeta_harvester.db.models import (
+    ToolMetadata,
+    ToolMetadataEnrichment,
+)
+from toolmeta_harvester.tasks.enrichment.llm import tool_metadata_enrichment
+from toolmeta_harvester.tasks.enrichment.prompts.generation import MODEL, PROMPT_VERSION
 
-ENRICHED_DESCRIPTIONS = Asset("toolmeta://enriched-descriptions")
+
+logger = logging.getLogger(__name__)
+
+LLM_API = llm_api()
+EGI_LLM_API_KEY = egi_llm_api_key()
+
+AIRFLOW_BATCH_SIZE = 50
 
 
 @dag(
-    dag_id="toolmeta_enrich_description",
-    schedule=None,
+    dag_id="toolmeta_enrich_descriptions",
+    schedule="0 3 * * 1",
     catchup=False,
     max_active_runs=1,
-    max_active_tasks=4,
-    tags=["toolmeta", "enrichment"],
-    doc_md="""Manually generate descriptions from raw metadata with one LLM call per record.
-
-    Configuration: `{"limit": 100}` (default bounded sample), `{"tool_ids": [...]}` for
-    an explicit set, or `{"full_catalog": true}` for an intentional catalog run. Generation
-    does not run extraction or LLM validation. Successful metadata changes emit an Asset event
-    consumed by the embedding DAG. Airflow run IDs are persisted with attempts.
-    """,
+    max_active_tasks=10,
+    tags=["llm", "enrichment"],
 )
-def tool_metadata_enrichment():
-    @task(retries=0)
-    def prepare_batches() -> list[dict]:
-        from toolmeta_harvester.enrichment import select_enrichment_batches
+def enrich_descriptions():
 
-        context = get_current_context()
-        conf = context["dag_run"].conf or {}
-        if not isinstance(conf, dict):
-            raise TypeError("DAG run configuration must be an object")
-        unknown = set(conf) - {"tool_ids", "limit", "full_catalog"}
-        if unknown:
-            raise ValueError(f"Unsupported enrichment parameters: {sorted(unknown)}")
-        full_catalog = bool(conf.get("full_catalog", False))
-        tool_ids = conf.get("tool_ids")
-        if tool_ids is not None and (full_catalog or "limit" in conf):
-            raise ValueError("tool_ids cannot be combined with limit or full_catalog")
-        if full_catalog and "limit" in conf:
-            raise ValueError("Do not provide limit when full_catalog is true")
-        batches = select_enrichment_batches(
-            tool_ids=tool_ids,
-            limit=None
-            if full_catalog or tool_ids is not None
-            else conf.get("limit", 100),
-            full_catalog=full_catalog,
-            batch_size=10,
+    @task
+    def initialize_db():
+        database.initialize_db()
+
+    @task
+    def create_batches() -> list[list[str]]:
+        """
+        Find tools whose enrichment is missing or stale.
+
+        An enrichment is stale when:
+        - no enrichment exists for the current model/prompt, or
+        - source metadata changed after the latest enrichment.
+        """
+
+        latest_enrichment = (
+            select(
+                ToolMetadataEnrichment.tool_id,
+                func.max(ToolMetadataEnrichment.created_at).label("created_at"),
+            )
+            .where(
+                ToolMetadataEnrichment.model == MODEL,
+                ToolMetadataEnrichment.prompt_version == PROMPT_VERSION,
+            )
+            .group_by(ToolMetadataEnrichment.tool_id)
+            .subquery()
         )
-        return [
-            {"tool_ids": batch, "run_id": context["dag_run"].run_id}
-            for batch in batches
-        ]
 
-    @task(retries=0, execution_timeout=timedelta(hours=3))
-    def enrich_batch(batch: dict) -> dict:
-        from toolmeta_harvester.enrichment import run_enrichment
-
-        return run_enrichment(tool_ids=batch["tool_ids"], run_id=batch["run_id"])
-
-    results = enrich_batch.expand(batch=prepare_batches())
-
-    @task(retries=0, outlets=[ENRICHED_DESCRIPTIONS])
-    def summarize_batches(batch_summaries: list[dict]) -> dict:
-        context = get_current_context()
-        totals = {
-            "selected_records": sum(
-                item["selected_records"] for item in batch_summaries
-            ),
-            "generated": sum(item["generated"] for item in batch_summaries),
-            "skipped_empty_metadata": sum(
-                item["skipped_empty_metadata"] for item in batch_summaries
-            ),
-            "insufficient_metadata": sum(
-                item["insufficient_metadata"] for item in batch_summaries
-            ),
-            "failed": sum(item["failed"] for item in batch_summaries),
-            "up_to_date": sum(item["up_to_date"] for item in batch_summaries),
-            "skipped_inflight": sum(
-                item["skipped_inflight"] for item in batch_summaries
-            ),
-            "llm_requests": sum(item["llm_requests"] for item in batch_summaries),
-        }
-        context["outlet_events"][ENRICHED_DESCRIPTIONS].extra = {
-            "run_id": context["dag_run"].run_id,
-            **totals,
-        }
-        return totals
-
-    totals = summarize_batches(results)
-
-    @task(retries=0)
-    def fail_on_record_errors(summary: dict) -> None:
-        if summary["failed"]:
-            raise AirflowFailException(
-                f"Enrichment had {summary['failed']} record failure(s); use the processing report to review and retry them."
+        with Session(engine) as session:
+            stmt = (
+                select(ToolMetadata.id)
+                .outerjoin(
+                    latest_enrichment,
+                    latest_enrichment.c.tool_id == ToolMetadata.id,
+                )
+                .where(
+                    ToolMetadata.raw_metadata.is_not(None),
+                    or_(
+                        latest_enrichment.c.tool_id.is_(None),
+                        ToolMetadata.date_modified > latest_enrichment.c.created_at,
+                    ),
+                )
+                .order_by(ToolMetadata.id)
             )
 
-    fail_on_record_errors(totals)
+            tool_ids = session.scalars(stmt).all()
+
+        ids = [str(tool_id) for tool_id in tool_ids]
+
+        return [
+            ids[i : i + AIRFLOW_BATCH_SIZE]
+            for i in range(0, len(ids), AIRFLOW_BATCH_SIZE)
+        ]
+
+    @task(
+        retries=2,
+        max_active_tis_per_dag=4,
+    )
+    def enrich_batch(tool_ids: list[str]) -> int:
+        ids = [uuid.UUID(tool_id) for tool_id in tool_ids]
+
+        with Session(engine) as session:
+            records = session.scalars(
+                select(ToolMetadata)
+                .where(ToolMetadata.id.in_(ids))
+                .order_by(ToolMetadata.id)
+            ).all()
+
+            if not records:
+                return 0
+
+            async def enrich_records():
+                results = []
+
+                for record in records:
+                    try:
+                        description = (
+                            await tool_metadata_enrichment.enrich_tool_metadata(
+                                raw_metadata=record.raw_metadata,
+                                endpoint_url=LLM_API,
+                                api_key=EGI_LLM_API_KEY,
+                            )
+                        )
+
+                        if description and description.strip():
+                            results.append(
+                                {
+                                    "tool_id": record.id,
+                                    "enriched_description": description.strip(),
+                                    "model": MODEL,
+                                    "prompt_version": PROMPT_VERSION,
+                                }
+                            )
+
+                    except Exception:
+                        logger.exception(
+                            "Failed to enrich tool %s",
+                            record.id,
+                        )
+
+                return results
+
+            values = asyncio.run(enrich_records())
+
+            if not values:
+                return 0
+
+            session.bulk_insert_mappings(
+                ToolMetadataEnrichment,
+                values,
+            )
+            session.commit()
+
+            logger.info(
+                "Enriched %d/%d tools",
+                len(values),
+                len(records),
+            )
+
+            return len(values)
+
+    init = initialize_db()
+    batches = create_batches()
+
+    init >> batches
+
+    enrich_batch.expand(tool_ids=batches)
 
 
-tool_metadata_enrichment()
+enrich_descriptions()

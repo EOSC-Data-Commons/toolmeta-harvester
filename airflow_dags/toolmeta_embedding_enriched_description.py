@@ -123,7 +123,7 @@ def embed_descriptions():
 
             values = [
                 {
-                    "tool_id": record.id,
+                    "tool_id": record.tool_id,
                     "embedding_type": EMBEDDING_TYPE,
                     "embedding_model": EMBEDDING_MODEL,
                     # Store the original text, not the prefixed/truncated text.

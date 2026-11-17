@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 # Update this version to trigger schema update in the database
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 TABLES = [
     ToolMetadata.__table__,
     ToolEmbedding.__table__,

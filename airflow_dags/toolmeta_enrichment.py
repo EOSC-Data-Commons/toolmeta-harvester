@@ -14,7 +14,7 @@ from toolmeta_harvester.db.models import (
     ToolMetadata,
     ToolMetadataEnrichment,
 )
-from toolmeta_harvester.tasks.enrichment.llm import tool_metadata_enrichment
+from toolmeta_harvester.tasks.enrichment.llm import enrich_tool_metadata
 from toolmeta_harvester.tasks.enrichment.prompts.generation import (
     MODEL,
     PROMPT_VERSION,
@@ -146,12 +146,10 @@ def create_enrichment_dag(
                         continue
 
                     try:
-                        description = (
-                            await tool_metadata_enrichment.enrich_tool_metadata(
-                                raw_metadata=raw_metadata,
-                                endpoint_url=LLM_API,
-                                api_key=EGI_LLM_API_KEY,
-                            )
+                        description = await enrich_tool_metadata(
+                            raw_metadata=raw_metadata,
+                            endpoint_url=LLM_API,
+                            api_key=EGI_LLM_API_KEY,
                         )
 
                         if not description or not description.strip():

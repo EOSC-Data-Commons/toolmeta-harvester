@@ -52,7 +52,8 @@ async def enrich_tool_metadata(
 
     async with httpx.AsyncClient(timeout=timeout) as client:
         response = await client.post(
-            f"{endpoint_url.rstrip('/')}/chat/completions",
+            # f"{endpoint_url.rstrip('/')}/chat/completions",
+            f"{endpoint_url.rstrip('/')}",
             json=payload,
             headers=headers,
         )

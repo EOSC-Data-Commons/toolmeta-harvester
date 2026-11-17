@@ -94,7 +94,7 @@ def embed_descriptions():
                 .order_by(ToolMetadataEnrichment.id)
             ).all()
 
-            records = [record for record in records if record.description]
+            records = [record for record in records if record.enriched_description]
 
             if not records:
                 return 0
@@ -104,7 +104,7 @@ def embed_descriptions():
             # ---------------------------------------------------------
 
             vectors = embedding.embed(
-                [record.description for record in records],
+                [record.enriched_description for record in records],
                 api_key=EGI_LLM_API_KEY,
                 api_url=EMBEDDING_API,
                 model=EMBEDDING_MODEL,

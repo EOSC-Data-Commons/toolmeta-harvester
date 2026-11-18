@@ -9,8 +9,9 @@ from toolmeta_harvester.config import egi_llm_api_key, embedding_api
 from toolmeta_harvester.db.engine import engine
 
 from toolmeta_harvester.db import database
-from toolmeta_harvester.db.models import Base, ToolMetadataEnrichment, ToolEmbedding
+from toolmeta_harvester.db.models import ToolMetadataEnrichment, ToolEmbedding
 from toolmeta_harvester.tasks import embedding
+from toolmeta_assets import ENRICHED_DESCRIPTIONS
 
 
 EMBEDDING_MODEL = "nomic-embed-text-v2-moe"
@@ -28,9 +29,10 @@ def text_hash(text: str) -> str:
 
 @dag(
     dag_id="toolmeta_embedding_enriched_description",
+    schedule=[ENRICHED_DESCRIPTIONS],
     catchup=False,
     max_active_tasks=10,
-    tags=["tool-embedding"],
+    tags=["embedding"],
 )
 def embed_descriptions():
 

@@ -19,6 +19,7 @@ from toolmeta_harvester.tasks.enrichment.prompts.generation import (
     MODEL,
     PROMPT_VERSION,
 )
+from toolmeta_assets import ENRICHED_DESCRIPTIONS
 
 
 logger = logging.getLogger(__name__)
@@ -202,12 +203,26 @@ def create_enrichment_dag(
 
             return len(values)
 
+        @task(outlets=[ENRICHED_DESCRIPTIONS])
+        def publish_enrichments(counts: list[int]) -> int:
+            total = sum(counts)
+
+            if total == 0:
+                from airflow.exceptions import AirflowSkipException
+
+                raise AirflowSkipException("No new enrichments")
+
+            logger.info("Published %d enriched descriptions", total)
+            return total
+
         init = initialize_db()
         batches = create_batches()
 
         init >> batches
 
-        enrich_batch.expand(tool_ids=batches)
+        results = enrich_batch.expand(tool_ids=batches)
+
+        publish_enrichments(results)
 
     return enrich_descriptions()
 

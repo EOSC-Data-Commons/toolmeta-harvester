@@ -7,6 +7,7 @@ from sqlalchemy.schema import CreateColumn
 from toolmeta_harvester.db.engine import Base, engine
 from toolmeta_harvester.db.models import (
     ToolMetadata,
+    ToolMetadataEnrichment,
     ToolEmbedding,
     HarvestSource,
 )
@@ -20,10 +21,11 @@ logger = logging.getLogger(__name__)
 
 
 # Update this version to trigger schema update in the database
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 TABLES = [
     ToolMetadata.__table__,
     ToolEmbedding.__table__,
+    ToolMetadataEnrichment.__table__,
     HarvestSource.__table__,
 ]
 

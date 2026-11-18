@@ -233,7 +233,7 @@ def create_enrichment_dag(
 
 toolmeta_enrich_descriptions = create_enrichment_dag(
     dag_id="toolmeta_enrich_descriptions",
-    schedule="0 3 * * 1",
+    schedule="0 5 * * 1",
     batch_size=AIRFLOW_BATCH_SIZE,
     max_active_batches=4,
     retries=2,

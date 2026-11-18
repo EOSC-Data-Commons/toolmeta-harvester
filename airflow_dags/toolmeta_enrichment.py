@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 LLM_API = llm_api()
 EGI_LLM_API_KEY = egi_llm_api_key()
 
-AIRFLOW_BATCH_SIZE = 50
+AIRFLOW_BATCH_SIZE = 40
 TEST_MAX_TOOLS = 5
 
 

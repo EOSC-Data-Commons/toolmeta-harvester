@@ -158,6 +158,7 @@ def test_llm_enrichment():
                 )
 
             return {
+                "llm_api_url": endpoint_url,
                 "attempted": len(records),
                 "successful": successful,
                 "failed": failures,
@@ -184,6 +185,10 @@ def test_llm_enrichment():
         estimated_wall_time = sum(batch_times) / MAX_ACTIVE_BATCHES
 
         logger.info("=== Overall LLM Performance ===")
+        logger.info(
+            "LLM API URL: %s",
+            ", ".join(sorted({r["llm_api_url"] for r in results})),
+        )
         logger.info("Batches: %d", len(results))
         logger.info("Attempted: %d", attempted)
         logger.info("Successful: %d", successful)

@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 LLM_API = llm_api()
 EGI_LLM_API_KEY = egi_llm_api_key()
 
-AIRFLOW_BATCH_SIZE = 40
+AIRFLOW_BATCH_SIZE = 50
 TEST_MAX_TOOLS = 5
 
 
@@ -244,11 +244,11 @@ toolmeta_enrich_descriptions = create_enrichment_dag(
 # Test DAG
 # ---------------------------------------------------------
 
-toolmeta_enrich_descriptions_test = create_enrichment_dag(
-    dag_id="toolmeta_enrich_descriptions_test",
-    schedule=None,
-    max_tools=TEST_MAX_TOOLS,
-    batch_size=TEST_MAX_TOOLS,
-    max_active_batches=1,
-    retries=0,
-)
+# toolmeta_enrich_descriptions_test = create_enrichment_dag(
+#     dag_id="toolmeta_enrich_descriptions_test",
+#     schedule=None,
+#     max_tools=TEST_MAX_TOOLS,
+#     batch_size=TEST_MAX_TOOLS,
+#     max_active_batches=1,
+#     retries=0,
+# )

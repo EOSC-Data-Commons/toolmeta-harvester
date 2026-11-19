@@ -22,10 +22,10 @@ logger = logging.getLogger(__name__)
     catchup=False,
     params={
         "num_tools": Param(
-            5,
+            100,
             type="integer",
             minimum=1,
-            maximum=100,
+            maximum=5000,
             description="Number of random tools to enrich",
         ),
     },

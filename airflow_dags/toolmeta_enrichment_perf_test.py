@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 BATCH_SIZE = 50
 MAX_ACTIVE_BATCHES = 4
+MAX_CONCURRENT_REQUESTS = 5
 
 
 @dag(
@@ -80,57 +81,70 @@ def test_llm_enrichment():
             ).all()
 
         async def run_enrichment():
-            durations = []
-            failures = 0
             start_total = time.perf_counter()
 
             endpoint_url = llm_api()
             api_key = egi_llm_api_key()
 
-            for tool_id, raw_metadata in records:
-                start = time.perf_counter()
+            semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
 
-                try:
-                    description = await enrich_tool_metadata(
-                        raw_metadata=raw_metadata,
-                        endpoint_url=endpoint_url,
-                        api_key=api_key,
-                    )
+            async def enrich_one(tool_id, raw_metadata):
+                async with semaphore:
+                    start = time.perf_counter()
 
-                    elapsed = time.perf_counter() - start
+                    try:
+                        description = await enrich_tool_metadata(
+                            raw_metadata=raw_metadata,
+                            endpoint_url=endpoint_url,
+                            api_key=api_key,
+                        )
 
-                    if not description or not description.strip():
-                        failures += 1
-                        logger.warning(
-                            "Empty enrichment: %s (%.2fs)",
+                        elapsed = time.perf_counter() - start
+
+                        if not description or not description.strip():
+                            logger.warning(
+                                "Empty enrichment: %s (%.2fs)",
+                                tool_id,
+                                elapsed,
+                            )
+                            return False, elapsed
+
+                        logger.debug(
+                            "Tool: %s | Duration: %.2fs\nEnrichment:\n%s",
+                            tool_id,
+                            elapsed,
+                            description,
+                        )
+
+                        return True, elapsed
+
+                    except Exception:
+                        elapsed = time.perf_counter() - start
+                        logger.exception(
+                            "Enrichment failed for %s after %.2fs",
                             tool_id,
                             elapsed,
                         )
-                        continue
+                        return False, elapsed
 
-                    durations.append(elapsed)
-
-                    logger.debug(
-                        "Tool: %s | Duration: %.2fs\nEnrichment:\n%s",
-                        tool_id,
-                        elapsed,
-                        description,
-                    )
-
-                except Exception:
-                    elapsed = time.perf_counter() - start
-                    failures += 1
-                    logger.exception(
-                        "Enrichment failed for %s after %.2fs",
-                        tool_id,
-                        elapsed,
-                    )
+            results = await asyncio.gather(
+                *(
+                    enrich_one(tool_id, raw_metadata)
+                    for tool_id, raw_metadata in records
+                )
+            )
 
             total_elapsed = time.perf_counter() - start_total
+
+            durations = [elapsed for success, elapsed in results if success]
+
             successful = len(durations)
+            failures = len(results) - successful
 
             logger.info("=== Batch Performance ===")
-            logger.info("Attempted: %d", len(records))
+            logger.info("LLM API URL: %s", endpoint_url)
+            logger.info("Concurrent requests: %d", MAX_CONCURRENT_REQUESTS)
+            logger.info("Attempted: %d", len(results))
             logger.info("Successful: %d", successful)
             logger.info("Failed: %d", failures)
             logger.info("Wall time: %.2fs", total_elapsed)
@@ -159,7 +173,8 @@ def test_llm_enrichment():
 
             return {
                 "llm_api_url": endpoint_url,
-                "attempted": len(records),
+                "concurrent_requests": MAX_CONCURRENT_REQUESTS,
+                "attempted": len(results),
                 "successful": successful,
                 "failed": failures,
                 "wall_seconds": total_elapsed,

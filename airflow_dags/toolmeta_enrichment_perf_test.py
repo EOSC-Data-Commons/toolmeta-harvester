@@ -2,6 +2,7 @@ import asyncio
 import logging
 import statistics
 import time
+import uuid
 from datetime import timedelta
 
 from airflow.sdk import dag, task, Param
@@ -15,46 +16,73 @@ from toolmeta_harvester.tasks.enrichment.llm import enrich_tool_metadata
 
 logger = logging.getLogger(__name__)
 
+BATCH_SIZE = 50
+MAX_ACTIVE_BATCHES = 4
+
 
 @dag(
-    dag_id="toolmeta_test_llm_enrichment",
+    dag_id="test_llm_enrichment",
     schedule=None,
     catchup=False,
+    max_active_runs=1,
+    max_active_tasks=10,
     params={
         "num_tools": Param(
-            100,
+            1000,
             type="integer",
             minimum=1,
-            maximum=5000,
+            maximum=10000,
             description="Number of random tools to enrich",
         ),
     },
-    tags=["llm", "test"],
+    tags=["llm", "test", "benchmark"],
 )
 def test_llm_enrichment():
 
-    @task(execution_timeout=timedelta(hours=1))
-    def enrich_random_tools(**context):
+    @task
+    def create_batches(**context) -> list[list[str]]:
         num_tools = context["params"]["num_tools"]
 
-        # Select random tools without modifying the database.
         with Session(engine) as session:
-            records = session.execute(
-                select(
-                    ToolMetadata.id,
-                    ToolMetadata.raw_metadata,
-                )
+            tool_ids = session.scalars(
+                select(ToolMetadata.id)
                 .where(ToolMetadata.raw_metadata.is_not(None))
                 .order_by(func.random())
                 .limit(num_tools)
             ).all()
 
-        logger.info("Selected %d random tools", len(records))
+        ids = [str(tool_id) for tool_id in tool_ids]
+
+        batches = [ids[i : i + BATCH_SIZE] for i in range(0, len(ids), BATCH_SIZE)]
+
+        logger.info(
+            "Selected %d random tools in %d batches",
+            len(ids),
+            len(batches),
+        )
+
+        return batches
+
+    @task(
+        retries=0,
+        max_active_tis_per_dag=MAX_ACTIVE_BATCHES,
+        execution_timeout=timedelta(hours=2),
+    )
+    def enrich_batch(tool_ids: list[str]) -> dict:
+        ids = [uuid.UUID(tool_id) for tool_id in tool_ids]
+
+        with Session(engine) as session:
+            records = session.execute(
+                select(
+                    ToolMetadata.id,
+                    ToolMetadata.raw_metadata,
+                ).where(ToolMetadata.id.in_(ids))
+            ).all()
 
         async def run_enrichment():
             durations = []
             failures = 0
-            total_start = time.perf_counter()
+            start_total = time.perf_counter()
 
             endpoint_url = llm_api()
             api_key = egi_llm_api_key()
@@ -74,7 +102,7 @@ def test_llm_enrichment():
                     if not description or not description.strip():
                         failures += 1
                         logger.warning(
-                            "No enrichment for tool %s (%.2fs)",
+                            "Empty enrichment: %s (%.2fs)",
                             tool_id,
                             elapsed,
                         )
@@ -93,19 +121,19 @@ def test_llm_enrichment():
                     elapsed = time.perf_counter() - start
                     failures += 1
                     logger.exception(
-                        "Enrichment failed for tool %s after %.2fs",
+                        "Enrichment failed for %s after %.2fs",
                         tool_id,
                         elapsed,
                     )
 
-            total_elapsed = time.perf_counter() - total_start
+            total_elapsed = time.perf_counter() - start_total
             successful = len(durations)
 
-            logger.info("=== LLM Enrichment Performance ===")
-            logger.info("Tools attempted: %d", len(records))
+            logger.info("=== Batch Performance ===")
+            logger.info("Attempted: %d", len(records))
             logger.info("Successful: %d", successful)
-            logger.info("Failed/empty: %d", failures)
-            logger.info("Total wall time: %.2fs", total_elapsed)
+            logger.info("Failed: %d", failures)
+            logger.info("Wall time: %.2fs", total_elapsed)
 
             if durations:
                 logger.info(
@@ -133,17 +161,66 @@ def test_llm_enrichment():
                 "attempted": len(records),
                 "successful": successful,
                 "failed": failures,
-                "total_seconds": round(total_elapsed, 2),
-                "enrichments_per_minute": (
-                    round(successful / total_elapsed * 60, 2)
-                    if total_elapsed > 0
-                    else 0
-                ),
+                "wall_seconds": total_elapsed,
+                "latencies": durations,
             }
 
         return asyncio.run(run_enrichment())
 
-    enrich_random_tools()
+    @task
+    def summarize_performance(results: list[dict]):
+        attempted = sum(r["attempted"] for r in results)
+        successful = sum(r["successful"] for r in results)
+        failed = sum(r["failed"] for r in results)
+
+        all_latencies = [
+            latency for result in results for latency in result["latencies"]
+        ]
+
+        batch_times = [r["wall_seconds"] for r in results]
+
+        # Approximation: assumes batches execute concurrently
+        # in groups of MAX_ACTIVE_BATCHES.
+        estimated_wall_time = sum(batch_times) / MAX_ACTIVE_BATCHES
+
+        logger.info("=== Overall LLM Performance ===")
+        logger.info("Batches: %d", len(results))
+        logger.info("Attempted: %d", attempted)
+        logger.info("Successful: %d", successful)
+        logger.info("Failed: %d", failed)
+
+        if all_latencies:
+            logger.info(
+                "Mean latency: %.2fs",
+                statistics.mean(all_latencies),
+            )
+            logger.info(
+                "Median latency: %.2fs",
+                statistics.median(all_latencies),
+            )
+            logger.info(
+                "Min latency: %.2fs",
+                min(all_latencies),
+            )
+            logger.info(
+                "Max latency: %.2fs",
+                max(all_latencies),
+            )
+
+        logger.info(
+            "Estimated wall time: %.2fs",
+            estimated_wall_time,
+        )
+
+        if estimated_wall_time > 0:
+            logger.info(
+                "Estimated throughput: %.2f enrichments/min",
+                successful / estimated_wall_time * 60,
+            )
+
+    batches = create_batches()
+    results = enrich_batch.expand(tool_ids=batches)
+    summarize_performance(results)
 
 
 test_llm_enrichment()

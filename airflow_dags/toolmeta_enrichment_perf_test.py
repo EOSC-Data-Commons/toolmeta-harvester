@@ -110,7 +110,7 @@ def test_llm_enrichment():
 
                     durations.append(elapsed)
 
-                    logger.info(
+                    logger.debug(
                         "Tool: %s | Duration: %.2fs\nEnrichment:\n%s",
                         tool_id,
                         elapsed,

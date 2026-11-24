@@ -33,7 +33,7 @@ class GalaxyConfig:
     host_url: str
 
 
-def load_galaxy_config() -> GitConfig:
+def load_galaxy_config() -> GalaxyConfig:
     galaxy = settings.galaxy_local
     return GalaxyConfig(api_key=galaxy["api_key"], host_url=galaxy["host_url"])
 
@@ -53,6 +53,11 @@ def egi_llm_api_key() -> str:
 def embedding_api() -> str:
     egi = settings.egi
     return egi["embedding_api"]
+
+
+def llm_api() -> str:
+    egi = settings.egi
+    return egi["llm_api"]
 
 
 def load_db_config() -> DatabaseConfig:

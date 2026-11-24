@@ -1,36 +1,33 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 from datetime import datetime
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
-    DateTime,
-    ForeignKey,
-    Integer,
     Boolean,
+    CheckConstraint,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
     String,
     Text,
-    Float,
-    func,
     UniqueConstraint,
-    Index,
+    func,
     text,
-    DDL,
-    event,
 )
+from sqlalchemy import text as sql_text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
-from pgvector.sqlalchemy import Vector
 
-from dataclasses import dataclass
 from toolmeta_harvester.db.engine import Base
 
 EMBEDDING_TYPES = [
     "description",
-    "description_enriched_01",
-    "description_enriched_02",
-    "authors",
-    "keywords",
+    "description_enriched",
 ]
 
 EMBEDDING_MODEL = "nomic-embed-text-v2-moe"
@@ -288,6 +285,57 @@ class ToolMetadata(Base):
         Index(
             "ix_tool_metadata_pipeline_tag",
             "pipeline_tag",
+        ),
+    )
+
+
+class ToolMetadataEnrichment(Base):
+    """Append-only history of successful metadata enrichments."""
+
+    __tablename__ = "tool_metadata_enrichment"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+
+    tool_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tool_metadata.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    enriched_description: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    model: Mapped[str] = mapped_column(
+        String(200),
+        nullable=False,
+    )
+
+    prompt_version: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "length(trim(enriched_description)) > 0",
+            name="ck_tool_metadata_enrichment_description_nonempty",
+        ),
+        Index(
+            "ix_tool_metadata_enrichment_tool_created",
+            "tool_id",
+            "created_at",
         ),
     )
 

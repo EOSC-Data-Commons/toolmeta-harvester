@@ -1,0 +1,168 @@
+import hashlib
+import uuid
+
+from airflow.sdk import dag, task
+from sqlalchemy import and_, or_, select, func
+from sqlalchemy.orm import Session
+from sqlalchemy.dialects.postgresql import insert
+from toolmeta_harvester.config import egi_llm_api_key, embedding_api
+from toolmeta_harvester.db.engine import engine
+
+from toolmeta_harvester.db import database
+from toolmeta_harvester.db.models import ToolMetadataEnrichment, ToolEmbedding
+from toolmeta_harvester.tasks import embedding
+from toolmeta_assets import ENRICHED_DESCRIPTIONS
+
+
+EMBEDDING_MODEL = "nomic-embed-text-v2-moe"
+EMBEDDING_TYPE = "description_enriched"
+EMBEDDING_API = embedding_api() or "https://llm.ai.egi.eu/embeddings"
+
+AIRFLOW_BATCH_SIZE = 500
+MIN_DESCRIPTION_LENGTH = 50
+EGI_LLM_API_KEY = egi_llm_api_key()
+
+
+def text_hash(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+@dag(
+    dag_id="toolmeta_embedding_enriched_description",
+    schedule=[ENRICHED_DESCRIPTIONS],
+    catchup=False,
+    max_active_tasks=10,
+    tags=["embedding"],
+)
+def embed_descriptions():
+
+    @task
+    def initialize_db():
+        # Base.metadata.create_all(engine)
+        database.initialize_db()
+
+    @task
+    def create_batches() -> list[list[str]]:
+        """
+        Find tools whose description embedding is missing or stale.
+
+        An embedding is stale when:
+        - no embedding exists, or
+        - ToolMetadata.date_modified > ToolEmbedding.created_at
+        """
+
+        with Session(engine) as session:
+            stmt = (
+                select(ToolMetadataEnrichment.id)
+                .outerjoin(
+                    ToolEmbedding,
+                    and_(
+                        ToolEmbedding.tool_id == ToolMetadataEnrichment.id,
+                        ToolEmbedding.embedding_type == EMBEDDING_TYPE,
+                        ToolEmbedding.embedding_model == EMBEDDING_MODEL,
+                    ),
+                )
+                .where(
+                    ToolMetadataEnrichment.enriched_description.is_not(None),
+                    func.length(ToolMetadataEnrichment.enriched_description)
+                    >= MIN_DESCRIPTION_LENGTH,
+                    or_(
+                        # Never embedded
+                        ToolEmbedding.id.is_(None),
+                        # Source metadata changed after embedding
+                        ToolMetadataEnrichment.created_at > ToolEmbedding.created_at,
+                    ),
+                )
+                .order_by(ToolMetadataEnrichment.id)
+            )
+
+            tool_ids = session.scalars(stmt).all()
+
+        ids = [str(tool_id) for tool_id in tool_ids]
+
+        return [
+            ids[i : i + AIRFLOW_BATCH_SIZE]
+            for i in range(0, len(ids), AIRFLOW_BATCH_SIZE)
+        ]
+
+    @task
+    def embed_batch(tool_ids: list[str]) -> int:
+        ids = [uuid.UUID(tool_id) for tool_id in tool_ids]
+
+        with Session(engine) as session:
+            records = session.scalars(
+                select(ToolMetadataEnrichment)
+                .where(ToolMetadataEnrichment.id.in_(ids))
+                .order_by(ToolMetadataEnrichment.id)
+            ).all()
+
+            records = [record for record in records if record.enriched_description]
+
+            if not records:
+                return 0
+
+            # ---------------------------------------------------------
+            # Generate description embeddings
+            # ---------------------------------------------------------
+
+            vectors = embedding.embed(
+                [record.enriched_description for record in records],
+                api_key=EGI_LLM_API_KEY,
+                api_url=EMBEDDING_API,
+                model=EMBEDDING_MODEL,
+                prefix="search_document: ",
+            )
+
+            if len(vectors) != len(records):
+                raise RuntimeError(
+                    f"Embedding API returned {len(vectors)} vectors "
+                    f"for {len(records)} records"
+                )
+
+            # ---------------------------------------------------------
+            # Prepare rows
+            # ---------------------------------------------------------
+
+            values = [
+                {
+                    "tool_id": record.tool_id,
+                    "embedding_type": EMBEDDING_TYPE,
+                    "embedding_model": EMBEDDING_MODEL,
+                    # Store the original text, not the prefixed/truncated text.
+                    "text": record.enriched_description,
+                    "vector": vector,
+                }
+                for record, vector in zip(records, vectors)
+            ]
+
+            # ---------------------------------------------------------
+            # Bulk UPSERT
+            # ---------------------------------------------------------
+
+            stmt = insert(ToolEmbedding).values(values)
+
+            stmt = stmt.on_conflict_do_update(
+                constraint="uq_tool_embedding",
+                set_={
+                    "text": stmt.excluded.text,
+                    "vector": stmt.excluded.vector,
+                    "created_at": func.now(),
+                },
+            )
+
+            session.execute(stmt)
+            session.commit()
+
+            return len(values)
+
+    init = initialize_db()
+    batches = create_batches()
+
+    init >> batches
+
+    embed_batch.expand(
+        tool_ids=batches,
+    )
+
+
+embed_descriptions()

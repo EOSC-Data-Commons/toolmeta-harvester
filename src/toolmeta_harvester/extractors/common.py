@@ -460,7 +460,7 @@ def extract_io_entities(
 
         results.append(
             {
-                "id": entity.get("@id"),
+                "id": entity.get("@id") or entity.get("identifier"),
                 "name": entity.get("name"),
                 "description": clean_description(entity.get("description")),
                 "type": [
